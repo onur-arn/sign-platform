@@ -3,10 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { SIGN_LABELS_FR } from '@/lib/signLabels'
+import { SIGN_COUNT } from '@/lib/signCount'
 import { displayParts } from '@/lib/userName'
-
-const SIGNS_COUNT = Object.keys(SIGN_LABELS_FR).length
 
 interface UserRow {
   id: string
@@ -29,8 +27,10 @@ export default function AdminPanelView() {
   const { data: session } = useSession()
   const { t, language } = useLanguage()
   const [users, setUsers] = useState<UserRow[]>([])
+  const [signsCount, setSignsCount] = useState(SIGN_COUNT)
   const [protectedEmail, setProtectedEmail] = useState<string | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
@@ -46,26 +46,30 @@ export default function AdminPanelView() {
           ? 'pl-PL'
           : 'fr-FR'
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true)
     try {
-      const res = await fetch('/api/admin/stats')
+      const res = await fetch('/api/admin/stats', { cache: 'no-store' })
       if (!res.ok) {
         setError(t.dashboard.loadUsersError)
         return
       }
       const data = await res.json()
       setUsers(data.users ?? [])
+      if (typeof data.signsCount === 'number') setSignsCount(data.signsCount)
       setProtectedEmail(data.protectedAdminEmail ?? null)
       setLastUpdate(new Date())
       setError(null)
     } catch {
       setError(t.dashboard.networkError)
+    } finally {
+      setLoading(false)
     }
   }, [t])
 
   useEffect(() => {
-    refresh()
-    const id = setInterval(refresh, 30000)
+    void refresh(true)
+    const id = setInterval(() => void refresh(false), 30000)
     return () => clearInterval(id)
   }, [refresh])
 
@@ -99,10 +103,26 @@ export default function AdminPanelView() {
       setError(t.dashboard.networkError)
     }
     setLoadingId(null)
-    await refresh()
+    await refresh(false)
   }
 
   const person = (u: UserRow) => displayParts(u)
+
+  if (loading && users.length === 0) {
+    return (
+      <div className="grid place-items-center py-16">
+        <div className="text-center">
+          <div
+            className="animate-spin rounded-full h-10 w-10 border-4 mx-auto"
+            style={{ borderColor: 'rgba(91,164,176,0.2)', borderTopColor: '#5ba4b0' }}
+          />
+          <p className="mt-4 text-sm" style={{ color: 'var(--text-sub)' }}>
+            {t.dashboard.loading}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -117,7 +137,7 @@ export default function AdminPanelView() {
           <p className="panel-desc" style={{ marginBottom: 0 }}>
             {t.admin.availableWords}
           </p>
-          <p className="admin-stat-value">{SIGNS_COUNT}</p>
+          <p className="admin-stat-value">{signsCount}</p>
         </div>
         <div className="admin-refresh">
           <p className="text-xs" style={{ color: 'var(--text-sub)' }}>
@@ -128,7 +148,7 @@ export default function AdminPanelView() {
               ? lastUpdate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
               : '—'}
           </p>
-          <button type="button" className="btn btn-ghost mt-2" onClick={refresh}>
+          <button type="button" className="btn btn-ghost btn-sm mt-2" onClick={() => void refresh(false)}>
             {t.admin.refresh}
           </button>
         </div>
