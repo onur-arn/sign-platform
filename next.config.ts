@@ -27,18 +27,26 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ['@prisma/client', 'prisma', 'pdf2json', 'pdf-parse', 'pdfjs-dist'],
-  async headers() {
-    return [{ source: '/(.*)', headers: securityHeaders }]
-  },
   async rewrites() {
     const cdn = (process.env.NEXT_PUBLIC_SIGNS_CDN ?? 'https://pub-7da8c20292624389aac188ff567fa99f.r2.dev').replace(
       /\/$/,
       '',
     )
     return [
+      // Navigateur demande souvent /favicon.ico hors des <link> — servir la boule
+      { source: '/favicon.ico', destination: '/icons/boule.ico' },
       {
         source: '/signs/:path*',
         destination: `${cdn}/signs/:path*`,
+      },
+    ]
+  },
+  async headers() {
+    return [
+      { source: '/(.*)', headers: securityHeaders },
+      {
+        source: '/icons/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, must-revalidate' }],
       },
     ]
   },
