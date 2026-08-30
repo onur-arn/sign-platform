@@ -135,8 +135,8 @@ docker-compose.yml   # Postgres local
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | Neon pooled |
-| `DIRECT_URL` | Neon direct |
+| `DATABASE_URL` | Neon pooled (ou URL unique) |
+| `DIRECT_URL` | Neon direct — **si omis, = `DATABASE_URL` au build** |
 | `NEXTAUTH_SECRET` | Secret fort (`openssl rand -base64 32`) |
 | `NEXTAUTH_URL` | `https://….vercel.app` puis ton domaine |
 | `NEXT_PUBLIC_SIGNS_CDN` | URL CDN des signes |
