@@ -11,6 +11,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Sign Language',
   description: 'Plateforme de traduction en langue des signes',
+  icons: {
+    icon: [
+      { url: '/favicon.svg?v=3', type: 'image/svg+xml' },
+      { url: '/favicon.ico?v=3' },
+      { url: '/icon-32.png?v=3', type: 'image/png', sizes: '32x32' },
+    ],
+    shortcut: '/favicon.ico?v=3',
+    apple: '/apple-touch-icon.png?v=3',
+  },
 }
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

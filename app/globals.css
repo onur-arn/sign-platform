@@ -334,6 +334,29 @@ select {
   box-shadow: 0 2px 8px rgba(91, 164, 176, 0.15);
 }
 
+.btn-sm {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 0.5rem;
+  gap: 0.25rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.btn-sm:active {
+  transform: scale(0.97);
+}
+
+.btn-danger-text {
+  color: var(--danger) !important;
+  background: rgba(225, 29, 72, 0.08);
+  border-color: rgba(225, 29, 72, 0.25);
+}
+
+.btn-danger-text:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.12);
+}
+
 .field {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -1141,9 +1164,13 @@ select {
 }
 
 .admin-table td {
-  padding: 0.7rem 0.6rem;
+  padding: 0.55rem 0.5rem;
   border-top: 1px solid var(--teal-border);
   vertical-align: middle;
+}
+
+.admin-table .btn {
+  white-space: nowrap;
 }
 
 .admin-badge {

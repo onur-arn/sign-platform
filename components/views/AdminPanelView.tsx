@@ -158,7 +158,7 @@ export default function AdminPanelView() {
                   <div className="flex gap-2 flex-wrap">
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="btn btn-primary btn-sm"
                       disabled={loadingId === u.id}
                       onClick={() => act('/api/admin/approve', { userId: u.id, action: 'approve' }, u.id)}
                     >
@@ -166,7 +166,7 @@ export default function AdminPanelView() {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-ghost"
+                      className="btn btn-ghost btn-sm"
                       disabled={loadingId === u.id}
                       onClick={() => act('/api/admin/approve', { userId: u.id, action: 'reject' }, u.id)}
                     >
@@ -199,7 +199,7 @@ export default function AdminPanelView() {
                   </div>
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="btn btn-primary btn-sm"
                     disabled={loadingId === u.id}
                     onClick={() => act('/api/admin/approve', { userId: u.id, action: 'approve' }, u.id)}
                   >
@@ -260,7 +260,7 @@ export default function AdminPanelView() {
                       ) : u.role === 'ADMIN' ? (
                         <button
                           type="button"
-                          className="btn btn-ghost"
+                          className="btn btn-ghost btn-sm"
                           disabled={loadingId === u.id}
                           onClick={() => act('/api/admin/role', { userId: u.id, role: 'USER' }, u.id)}
                         >
@@ -269,7 +269,7 @@ export default function AdminPanelView() {
                       ) : (
                         <button
                           type="button"
-                          className="btn btn-ghost"
+                          className="btn btn-ghost btn-sm"
                           disabled={loadingId === u.id}
                           onClick={() => act('/api/admin/role', { userId: u.id, role: 'ADMIN' }, u.id)}
                         >
@@ -282,14 +282,13 @@ export default function AdminPanelView() {
                       {!roleLocked && (
                         <button
                           type="button"
-                          className="btn btn-ghost"
+                          className="btn btn-sm btn-danger-text"
                           disabled={loadingId === u.id}
                           onClick={() => {
                             if (confirm(`${t.admin.deleteConfirm} "${u.email}" ?`)) {
                               act('/api/admin/delete-user', { userId: u.id }, u.id)
                             }
                           }}
-                          style={{ color: 'var(--danger)' }}
                         >
                           {t.admin.deleteAccount}
                         </button>
