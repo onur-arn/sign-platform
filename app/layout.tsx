@@ -13,12 +13,13 @@ export const metadata: Metadata = {
   description: 'Plateforme de traduction en langue des signes',
   icons: {
     icon: [
-      { url: '/favicon.svg?v=3', type: 'image/svg+xml' },
-      { url: '/favicon.ico?v=3' },
-      { url: '/icon-32.png?v=3', type: 'image/png', sizes: '32x32' },
+      { url: '/favicon.png?v=4', type: 'image/png', sizes: '32x32' },
+      { url: '/icon-32.png?v=4', type: 'image/png', sizes: '32x32' },
+      { url: '/icon-192.png?v=4', type: 'image/png', sizes: '192x192' },
+      { url: '/favicon.ico?v=4' },
     ],
-    shortcut: '/favicon.ico?v=3',
-    apple: '/apple-touch-icon.png?v=3',
+    shortcut: '/favicon.ico?v=4',
+    apple: [{ url: '/apple-touch-icon.png?v=4', sizes: '180x180', type: 'image/png' }],
   },
 }
 
