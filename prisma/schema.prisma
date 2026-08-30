@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  status        String    @default("PENDING")  // PENDING | APPROVED | REJECTED
+  role          String    @default("USER")     // USER | ADMIN
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  translations  Translation[]
+}
+
+model Translation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  text      String
+  type      String   // "pdf", "text", "voice"
+  fileUrl   String?
+  createdAt DateTime @default(now())
+}
+
+model Sign {
+  id           String   @id @default(cuid())
+  word         String   @unique
+  category     String?
+  animationUrl String
+  createdAt    DateTime @default(now())
+}
+
+// Cache persistant pour les synonymes trouvés par l'IA
+model SynonymCache {
+  id        String   @id @default(cuid())
+  key       String   @unique  // "lang:token"
+  synonym   String?           // null = aucun synonyme trouvé
+  createdAt DateTime @default(now())
+}
+
