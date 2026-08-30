@@ -1,16 +1,18 @@
 'use client'
 
-import Link from 'next/link'
 import { useLanguage } from '@/contexts/LanguageContext'
 import LanguageSelector from '@/components/LanguageSelector'
 import { DarkModeToggle } from '@/components/DarkModeToggle'
 
 export default function LandingHome() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const hasPrefix = Boolean(t.hero.titlePrefix?.trim())
+  const badge = t.hero.badge.replace(/✨/g, '').trim()
+  const ctaLabel = t.hero.cta
+  const loginLabel = t.hero.login
 
   return (
-    <div className="landing-page">
+    <div className="landing-page notranslate" lang={language} translate="no">
       <div className="landing-atmosphere" aria-hidden>
         <div className="landing-orb landing-orb-a" />
         <div className="landing-orb landing-orb-b" />
@@ -25,9 +27,10 @@ export default function LandingHome() {
       </header>
 
       <main className="landing-hero-stage">
-        <div className="landing-hero-copy">
+        {/* key force le remount complet à chaque langue (évite textes figés) */}
+        <div className="landing-hero-copy" key={`hero-${language}`}>
           <p className="landing-kicker landing-rise" style={{ animationDelay: '40ms' }}>
-            {t.hero.badge.replace(/✨/g, '').trim()}
+            {badge}
           </p>
 
           <h1 className="landing-brand landing-rise" style={{ animationDelay: '120ms' }}>
@@ -49,12 +52,23 @@ export default function LandingHome() {
           </p>
 
           <div className="landing-actions landing-rise" style={{ animationDelay: '320ms' }}>
-            <Link href="/register" className="landing-btn landing-btn-primary">
-              {t.hero.cta}
-            </Link>
-            <Link href="/login" className="landing-btn landing-btn-secondary">
-              {t.hero.login}
-            </Link>
+            {/* <a> natif : Next <Link> peut garder l’ancien libellé après changement i18n */}
+            <a
+              href="/register"
+              className="landing-btn landing-btn-primary notranslate"
+              hrefLang={language}
+              translate="no"
+            >
+              {ctaLabel}
+            </a>
+            <a
+              href="/login"
+              className="landing-btn landing-btn-secondary notranslate"
+              hrefLang={language}
+              translate="no"
+            >
+              {loginLabel}
+            </a>
           </div>
         </div>
       </main>
