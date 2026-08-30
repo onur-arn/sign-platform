@@ -1,0 +1,16 @@
+# Postgres local optionnel : docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: sign
+      POSTGRES_PASSWORD: sign
+      POSTGRES_DB: sign_platform
+    volumes:
+      - sign_pg_data:/var/lib/postgresql/data
+
+volumes:
+  sign_pg_data:

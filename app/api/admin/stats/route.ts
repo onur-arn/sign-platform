@@ -10,7 +10,17 @@ export async function GET() {
   const currentUser = await prisma.user.findUnique({ where: { email: session.user!.email! } });
   if (currentUser?.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
 
-  const userSelect = { id: true, email: true, name: true, status: true, role: true, createdAt: true, updatedAt: true };
+  const userSelect = {
+    id: true,
+    email: true,
+    firstName: true,
+    lastName: true,
+    name: true,
+    status: true,
+    role: true,
+    createdAt: true,
+    updatedAt: true,
+  };
 
   const [users, translations, signs] = await Promise.all([
     prisma.user.findMany({ select: userSelect, orderBy: { createdAt: 'desc' } }),
@@ -22,5 +32,10 @@ export async function GET() {
     prisma.sign.findMany({ orderBy: { word: 'asc' } }),
   ]);
 
-  return NextResponse.json({ users, translations, signs });
+  return NextResponse.json({
+    users,
+    translations,
+    signs,
+    protectedAdminEmail: process.env.PROTECTED_ADMIN_EMAIL || null,
+  });
 }

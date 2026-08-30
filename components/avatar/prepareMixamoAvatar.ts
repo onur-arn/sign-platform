@@ -318,6 +318,14 @@ function snapToFloor(root: THREE.Object3D) {
   root.updateMatrixWorld(true)
 }
 
+/** Pieds à la même hauteur qu’Emre (Mixamo ♂ à y = -1). */
+export function emreStageY(root: THREE.Object3D, emreFeetY = -1) {
+  root.updateMatrixWorld(true)
+  const box = new THREE.Box3().setFromObject(root)
+  if (box.isEmpty() || !Number.isFinite(box.min.y)) return emreFeetY
+  return emreFeetY - box.min.y
+}
+
 /**
  * Remonte buste / bras / tête au-dessus des hanches (Spine.local.y).
  * Ne touche pas aux os des jambes (enfants de Hips, pas de Spine).

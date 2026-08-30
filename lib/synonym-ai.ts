@@ -7,6 +7,7 @@ const LANG_PROMPTS: Record<string, string> = {
   fr: 'Donne 5 synonymes courants en français pour le mot "{word}", du plus simple au moins courant. Réponds uniquement avec les mots séparés par des virgules, sans explication.',
   en: 'Give 5 common English synonyms for the word "{word}", from most to least common. Reply only with the words separated by commas, no explanation.',
   tr: '"{word}" kelimesinin 5 yaygın Türkçe eşanlamlısını ver, en yaygından en az yaygına doğru. Sadece virgülle ayrılmış kelimeleri yaz, açıklama yapma.',
+  pl: 'Podaj 5 popularnych polskich synonimów słowa "{word}", od najczęstszych do rzadszych. Odpowiedz tylko słowami oddzielonymi przecinkami, bez wyjaśnień.',
 };
 
 export async function findSynonymSign(

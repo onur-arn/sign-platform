@@ -3,11 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
+    "dev": "next dev --webpack",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "dev:turbo": "next dev",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "db:setup": "prisma migrate deploy && npx tsx prisma/seed.ts",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build --webpack"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -18,7 +27,9 @@
     "next": "16.3.3",
     "next-auth": "^4.24.15",
     "nodemailer": "^7.0.13",
+    "pdf-parse": "^2.4.5",
     "pdf2json": "^4.0.3",
+    "pdfjs-dist": "^5.4.296",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "^6.25.0",
@@ -36,6 +47,7 @@
     "eslint-config-next": "16.3.3",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

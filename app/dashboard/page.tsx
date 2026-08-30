@@ -10,7 +10,7 @@ import TraduireView from '@/components/views/TraduireView'
 import DictionnaireView from '@/components/views/DictionnaireView'
 import DocumentsView from '@/components/views/DocumentsView'
 import AvatarStudioView from '@/components/views/AvatarStudioView'
-import ParametresView from '@/components/views/ParametresView'
+import InformationView from '@/components/views/InformationView'
 import AdminPanelView from '@/components/views/AdminPanelView'
 import { useLanguage } from '@/contexts/LanguageContext'
 
@@ -19,43 +19,69 @@ export default function DashboardPage() {
   const router = useRouter()
   const { t } = useLanguage()
   const [tab, setTab] = useState<DashboardTab>('traduire')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
   }, [status, router])
 
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('tab')
+    if (
+      q === 'traduire' ||
+      q === 'dictionnaire' ||
+      q === 'documents' ||
+      q === 'avatar' ||
+      q === 'information' ||
+      q === 'admin'
+    ) {
+      setTab(q)
+    }
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)')
+    const sync = () => setSidebarOpen(!mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'ADMIN'
+
+  useEffect(() => {
+    if (!isAdmin && tab === 'admin') setTab('traduire')
+  }, [isAdmin, tab])
+
   if (status === 'loading') {
     return (
-      <div className="min-h-screen grid place-items-center">
-        <p style={{ color: 'var(--ink-muted)' }}>{t.dashboard.loading}</p>
+      <div className="min-h-screen grid place-items-center" style={{ background: 'var(--bg-page)' }}>
+        <div className="text-center">
+          <div
+            className="animate-spin rounded-full h-14 w-14 border-4 mx-auto"
+            style={{ borderColor: 'rgba(91,164,176,0.2)', borderTopColor: '#5ba4b0' }}
+          />
+          <p className="mt-5 font-medium" style={{ color: 'var(--text-sub)' }}>
+            {t.dashboard.loading}
+          </p>
+        </div>
       </div>
     )
   }
 
   if (!session) return null
 
-  const isAdmin = (session.user as { role?: string }).role === 'ADMIN'
-  const labels: Record<DashboardTab, string> = {
-    traduire: t.dashboard.translate,
-    dictionnaire: t.admin.dictionary,
-    documents: t.dashboard.pdf,
-    avatar: 'Avatar',
-    parametres: 'Paramètres',
-    admin: t.dashboard.admin,
-  }
-
   const titles: Record<DashboardTab, string> = {
-    traduire: 'Traduire',
-    dictionnaire: 'Dictionnaire',
-    documents: 'Documents',
-    avatar: 'Avatar',
-    parametres: 'Paramètres',
-    admin: 'Admin',
+    traduire: t.dashboard.navTranslate,
+    dictionnaire: t.dashboard.navDictionary,
+    documents: t.dashboard.navDocuments,
+    avatar: t.dashboard.navAvatar,
+    information: t.dashboard.navInformation,
+    admin: t.dashboard.navAdmin,
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <Sidebar
         active={tab}
         onChange={setTab}
@@ -63,8 +89,6 @@ export default function DashboardPage() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onLogout={() => signOut({ callbackUrl: '/' })}
-        labels={labels}
-        logoutLabel={t.dashboard.logout}
       />
 
       <div className="shell-main">
@@ -72,13 +96,16 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="mobile-nav-toggle btn btn-ghost"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Menu"
+              className="sidebar-toggle btn btn-ghost"
+              onClick={() => setSidebarOpen((v) => !v)}
+              aria-label={t.dashboard.toggleMenu}
+              aria-expanded={sidebarOpen}
             >
-              ☰
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
-            <h1 className="font-display text-xl m-0">{titles[tab]}</h1>
+            <h1>{titles[tab]}</h1>
           </div>
           <div className="flex items-center gap-2">
             <LanguageSelector variant="compact" />
@@ -91,7 +118,7 @@ export default function DashboardPage() {
           {tab === 'dictionnaire' && <DictionnaireView />}
           {tab === 'documents' && <DocumentsView />}
           {tab === 'avatar' && <AvatarStudioView />}
-          {tab === 'parametres' && <ParametresView />}
+          {tab === 'information' && <InformationView />}
           {tab === 'admin' && isAdmin && <AdminPanelView />}
         </main>
       </div>

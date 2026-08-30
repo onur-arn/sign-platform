@@ -102,6 +102,7 @@ interface AvatarProps {
   isPlaying: boolean
   fps?: number
   onDone?: () => void
+  onLoad?: () => void
   idleFrame?: SignFrame | null
   transitionFrame?: SignFrame | null
   activeSign?: string | null
@@ -119,12 +120,15 @@ export default function SignLanguageAvatar({
   isPlaying,
   fps = 25,
   onDone,
+  onLoad,
   idleFrame,
   transitionFrame,
   activeSign,
   modelUrl = '/avatar.glb',
   prepareOptions = null,
 }: AvatarProps) {
+  const onLoadRef = useRef(onLoad)
+  onLoadRef.current = onLoad
   const { scene: gltfScene } = useGLTF(modelUrl)
   const { scene: maleArmSource } = useGLTF('/avatar.glb')
   const needsPrepare = prepareOptions != null
@@ -214,12 +218,20 @@ export default function SignLanguageAvatar({
         }
       }
     })
+    onLoadRef.current?.()
   }, [scene])
 
+  // Quand le frame idle (comprendre) arrive, invalider le fallback bras-bas
+  // capturé trop tôt, pour reconstruire les mains croisées à l'avant.
+  useEffect(() => {
+    if (!idleFrame?.pose) return
+    naturalIdleQuats.current = {}
+    idleQuats.current = {}
+  }, [idleFrame])
 
   // Pré-calcule les quats du frame 0 du signe suivant pour l'outro blend
   useEffect(() => {
-    if (!transitionFrame || Object.keys(bones.current).length === 0) {
+    if (!transitionFrame?.pose || Object.keys(bones.current).length === 0) {
       transitionQuats.current = {}
       return
     }
@@ -288,7 +300,7 @@ export default function SignLanguageAvatar({
 
     // 2. Même idle que Mixamo ♂ : frame « comprendre » + légère ouverture.
     // RPM (armsOnly) : ouverture monde Z plus marquée — sinon les mains se touchent.
-    if (idleFrame && Object.keys(bones.current).length > 0) {
+    if (idleFrame?.pose && Object.keys(bones.current).length > 0) {
       applyFrame(idleFrame, bones.current, restQuats.current)
       if (prepareOptions?.armsOnly) {
         openArmsOutward(scene, prepareOptions.armOpen ?? 0.06)
@@ -503,10 +515,14 @@ export default function SignLanguageAvatar({
     if (currentIdx !== lastCapturedIdx.current) {
       lastCapturedIdx.current = currentIdx
 
+      const frameA = frames[currentIdx]
+      const frameB = frames[nextIdx]
+      if (!frameA?.pose || !frameB?.pose) return
+
       const frozenA = frozenSidesPerFrame.current[currentIdx] ?? new Set<'Left' | 'Right'>()
       const frozenB = frozenSidesPerFrame.current[nextIdx]    ?? new Set<'Left' | 'Right'>()
 
-      applyFrame(frames[currentIdx], bones.current, restQuats.current)
+      applyFrame(frameA, bones.current, restQuats.current)
       for (const [name, bone] of Object.entries(bones.current)) {
         if (!frameAQuats.current[name]) frameAQuats.current[name] = new THREE.Quaternion()
         frameAQuats.current[name].copy(bone.quaternion)
@@ -517,7 +533,7 @@ export default function SignLanguageAvatar({
         }
       }
 
-      applyFrame(frames[nextIdx], bones.current, restQuats.current)
+      applyFrame(frameB, bones.current, restQuats.current)
       for (const [name, bone] of Object.entries(bones.current)) {
         if (!frameBQuats.current[name]) frameBQuats.current[name] = new THREE.Quaternion()
         frameBQuats.current[name].copy(bone.quaternion)
@@ -604,6 +620,7 @@ export default function SignLanguageAvatar({
     )
   })
 
+  // dispose={null} : les géométries sont partagées avec le cache GLTF — ne pas les détruire au démontage
   // dispose={null} : les géométries sont partagées avec le cache GLTF — ne pas les détruire au démontage
   return <primitive object={scene} position={[0, -1, 0]} dispose={null} />
 }
@@ -859,6 +876,7 @@ function applyFrame(
   }
 
   const { pose, left_hand, right_hand } = frame
+  if (!pose || pose.length < 25) return
 
   if (pose.length >= 25) {
     // Auto-calibrate z scale: normalize so nose depth = TARGET_NOSE_Z shoulder-widths.

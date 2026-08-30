@@ -2,6 +2,9 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { fullName } from "./userName";
+import { rateLimit } from "./rate-limit";
+import { RATE } from "./request-limits";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -16,9 +19,19 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Email et mot de passe requis");
         }
 
+        const email = credentials.email.trim().toLowerCase();
+        const limited = await rateLimit(
+          `login:${email}`,
+          RATE.login.limit,
+          RATE.login.windowMs,
+        );
+        if (!limited.ok) {
+          throw new Error("Trop de tentatives. Réessayez dans quelques minutes.");
+        }
+
         try {
           const user = await prisma.user.findUnique({
-            where: { email: credentials.email }
+            where: { email }
           });
 
           if (!user) {
@@ -37,7 +50,12 @@ export const authOptions: NextAuthOptions = {
             throw new Error("Votre demande d'inscription a été refusée.");
           }
 
-          return { id: user.id, email: user.email, name: user.name, role: user.role };
+          return {
+            id: user.id,
+            email: user.email,
+            name: fullName(user.firstName, user.lastName, user.name),
+            role: user.role,
+          };
         } catch (error) {
           console.error("Erreur d'authentification:", error);
           throw error;
@@ -47,6 +65,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60, // 7 jours
   },
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {

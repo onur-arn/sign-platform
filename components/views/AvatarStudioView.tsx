@@ -1,56 +1,49 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useAvatar } from '@/contexts/AvatarContext'
+import { useLanguage } from '@/contexts/LanguageContext'
+import AvatarLoadingOverlay from '@/components/avatar/AvatarLoadingOverlay'
+
+function AvatarChunkFallback() {
+  const { t } = useLanguage()
+  return (
+    <div className="avatar-canvas relative overflow-hidden">
+      <AvatarLoadingOverlay label={t.dashboard.avatarLoadingFull} />
+    </div>
+  )
+}
 
 const SignAvatarPlayer = dynamic(() => import('@/components/avatar/SignAvatarPlayer'), {
   ssr: false,
-  loading: () => (
-    <div className="avatar-canvas" style={{ display: 'grid', placeItems: 'center', minHeight: 420 }}>
-      <p style={{ color: 'var(--ink-muted)' }}>…</p>
-    </div>
-  ),
+  loading: () => <AvatarChunkFallback />,
 })
 
 export default function AvatarStudioView() {
-  const { avatarId, setAvatarId, options, avatar } = useAvatar()
-  const [demoTs, setDemoTs] = useState(0)
-
-  useEffect(() => {
-    setDemoTs(Date.now())
-  }, [avatarId])
+  const { t } = useLanguage()
+  const { avatarId, setAvatarId, options } = useAvatar()
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
-      <div className="panel">
-        <h2 className="panel-title">Avatar</h2>
-        <p className="panel-desc">Choisissez l&apos;avatar qui signe pour vous. Sélection actuelle : {avatar.label}.</p>
-        <div className="avatar-grid">
+    <div className="avatar-studio">
+      <aside className="panel avatar-studio-list">
+        <h2 className="panel-title">{t.dashboard.navAvatar}</h2>
+        <ul className="avatar-name-list">
           {options.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              className={`avatar-pick ${avatarId === opt.id ? 'selected' : ''}`}
-              onClick={() => setAvatarId(opt.id)}
-            >
-              <div className="name">{opt.label}</div>
-              <div className="meta">{opt.pipeline === 'male' ? 'Pipeline male' : 'Pipeline female'}</div>
-            </button>
+            <li key={opt.id}>
+              <button
+                type="button"
+                className={`avatar-name-item ${avatarId === opt.id ? 'selected' : ''}`}
+                onClick={() => setAvatarId(opt.id)}
+              >
+                {opt.label}
+              </button>
+            </li>
           ))}
-        </div>
-        <button type="button" className="btn btn-primary mt-4" onClick={() => setDemoTs(Date.now())}>
-          Démo « bonjour »
-        </button>
-      </div>
-      <div className="panel" style={{ padding: '0.85rem' }}>
-        {demoTs > 0 ? (
-          <SignAvatarPlayer key={avatarId} text="bonjour" ts={demoTs} language="fr" />
-        ) : (
-          <div className="avatar-canvas" style={{ display: 'grid', placeItems: 'center', minHeight: 420 }}>
-            <p style={{ color: 'var(--ink-muted)' }}>{avatar.label}</p>
-          </div>
-        )}
+        </ul>
+      </aside>
+
+      <div className="panel avatar-studio-preview">
+        <SignAvatarPlayer key={avatarId} text="" ts={0} language="fr" showControls={false} />
       </div>
     </div>
   )

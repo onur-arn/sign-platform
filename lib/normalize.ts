@@ -33247,8 +33247,8 @@ const TR_REVERSE: Record<string, string> = {
   'hesap makinesi': 'calculatrice',
   'hesapla': 'calculer',
   'heteroseksüel': 'heterosexuel',
-  'hey sen': 'yo_yo',
-  'heyecan': 'twitter',
+  'hey sen': 'bonjour_1',
+  'heyecan': 'passion',
   'heykel': 'statue_2',
   'heysel salonu': 'salon_heysel',
   'hibe sözleşmesi': 'accorder_d_rsquo_accord_1',
@@ -35042,7 +35042,7 @@ const TR_REVERSE: Record<string, string> = {
   'televizyon': 'television',
   'televizyon kanalı': 'chaine_tv',
   'televizyon televizyon': 'television_tv_1',
-  'telgraf': 'telegram_1',
+  'telegram': 'telegram_1',
   'tembel tembel': 'faineant_paresseux_3',
   'temel': 'base_2',
   'temiz': 'nettoyer_1',
@@ -35355,7 +35355,7 @@ const TR_REVERSE: Record<string, string> = {
   'yakında görüşürüz': 'a_bientot_1',
   'yakından bakın görün': 'regarder_attentivement_voir_3',
   'yakınlaştır': 'zoom',
-  'yakınlık': 'proximus_1',
+  'yakınlık': 'pres_de',
   'yalamak hayvan': 'lecher_animal',
   'yalan yalan': 'mensonge_mentir',
   'yalnız tekil yalnız benzersiz': 'seul_singulier_solitaire_unique_1',
@@ -36921,6 +36921,133 @@ export function lookupWord(word: string, language: string): string | null {
   }
 
   return null
+}
+
+/** Suffixes courants pour ramener academic→academ, scolaire→scolair, etc. */
+const SIMILAR_SUFFIXES = [
+  'iquement', 'iquement', 'ically', 'ical', 'icism', 'istic', 'tion', 'sion',
+  'ness', 'ment', 'able', 'ible', 'ance', 'ence', 'ally', 'ing', 'ers', 'ies',
+  'ied', 'ity', 'ive', 'ize', 'ise', 'ful', 'ous', 'ique', 'ique', 'eurs', 'euse',
+  'euses', 'ants', 'antes', 'ents', 'entes', 'ique', 'ique',
+  'ler', 'lar', 'lik', 'lık', 'luk', 'lük', 'leri', 'ları',
+  'ic', 'al', 'ly', 'er', 'ed', 'es', 's', 'e',
+]
+
+function similarStems(word: string): string[] {
+  const out = new Set<string>([word])
+  for (const suf of SIMILAR_SUFFIXES) {
+    if (word.length > suf.length + 3 && word.endsWith(suf)) {
+      out.add(word.slice(0, -suf.length))
+    }
+  }
+  // academic → academ (+y pour coller à academy)
+  if (word.endsWith('ic') && word.length > 5) {
+    const base = word.slice(0, -2)
+    out.add(base)
+    out.add(`${base}y`)
+    out.add(`${base}ie`)
+    out.add(`${base}e`)
+  }
+  if (word.endsWith('ical') && word.length > 6) {
+    const base = word.slice(0, -4)
+    out.add(base)
+    out.add(`${base}y`)
+    out.add(`${base}ie`)
+  }
+  return [...out].filter((s) => s.length >= 4)
+}
+
+function commonPrefixLen(a: string, b: string): number {
+  const n = Math.min(a.length, b.length)
+  let i = 0
+  while (i < n && a[i] === b[i]) i++
+  return i
+}
+
+type LexEntry = { word: string; sign: string; lang: string }
+
+let _lexiconCache: LexEntry[] | null = null
+
+function getAllLexiconEntries(): LexEntry[] {
+  if (_lexiconCache) return _lexiconCache
+  const entries: LexEntry[] = []
+  const pushMap = (map: Record<string, string>, lang: string) => {
+    for (const [word, sign] of Object.entries(map)) {
+      if (word.length >= 4 && !word.includes(' ')) entries.push({ word, sign, lang })
+    }
+  }
+  const pushDyn = (map: Map<string, string>, lang: string) => {
+    for (const [word, sign] of map.entries()) {
+      if (word.length >= 4 && !word.includes(' ')) entries.push({ word, sign, lang })
+    }
+  }
+  pushMap(FR_REVERSE, 'fr')
+  pushMap(EN_REVERSE, 'en')
+  pushMap(TR_REVERSE, 'tr')
+  pushDyn(EN_DYNAMIC, 'en')
+  pushDyn(TR_DYNAMIC, 'tr')
+  _lexiconCache = entries
+  return entries
+}
+
+/**
+ * Rapproche un mot inconnu d’une entrée proche du dictionnaire
+ * (ex. academic → academy / academie), toutes langues confondues.
+ */
+export function findSimilarSign(
+  word: string,
+  language: string,
+): { sign: string; matched: string } | null {
+  const norm = removeAccents(word.toLowerCase().trim())
+  if (!norm || norm.length < 4) return null
+
+  // Déjà connu ? (sécurité)
+  const direct = lookupWord(norm, language)
+  if (direct) return { sign: direct, matched: norm }
+
+  const stems = similarStems(norm)
+  const lexicon = getAllLexiconEntries()
+
+  type Cand = { sign: string; matched: string; score: number }
+  const best: { current: Cand | null } = { current: null }
+
+  const consider = (entry: LexEntry, score: number) => {
+    const adjusted = score + (entry.lang === language ? 3 : 0)
+    if (!best.current || adjusted > best.current.score) {
+      best.current = { sign: entry.sign, matched: entry.word, score: adjusted }
+    }
+  }
+
+  for (const entry of lexicon) {
+    const { word: key } = entry
+    // Exact stem hit
+    if (stems.includes(key)) {
+      consider(entry, 100)
+      continue
+    }
+
+    for (const stem of stems) {
+      if (stem.length < 4) continue
+      // academy starts with academ ; academie starts with academ
+      if (key.startsWith(stem) && key.length - stem.length <= 4) {
+        consider(entry, 70 + stem.length)
+      } else if (stem.startsWith(key) && stem.length - key.length <= 3) {
+        consider(entry, 60 + key.length)
+      }
+    }
+
+    // Préfixe commun long (academic / academy → academ)
+    const pref = commonPrefixLen(norm, key)
+    const minLen = Math.min(norm.length, key.length)
+    const lenDiff = Math.abs(norm.length - key.length)
+    if (pref >= 5 && pref >= minLen * 0.7 && lenDiff <= 5) {
+      consider(entry, pref * 8 - lenDiff)
+    }
+  }
+
+  // Seuil minimal pour éviter les faux amis trop faibles
+  if (!best.current || best.current.score < 40) return null
+  return { sign: best.current.sign, matched: best.current.matched }
 }
 
 /**

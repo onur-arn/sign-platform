@@ -15,6 +15,7 @@ const LANGUAGES_FR = [
   { code: 'tr-TR', name: '🇹🇷 Turc' },
   { code: 'en-GB', name: '🇬🇧 Anglais (UK)' },
   { code: 'en-US', name: '🇺🇸 Anglais (US)' },
+  { code: 'pl-PL', name: '🇵🇱 Polonais' },
 ];
 
 const LANGUAGES_EN = [
@@ -22,6 +23,7 @@ const LANGUAGES_EN = [
   { code: 'tr-TR', name: '🇹🇷 Turkish' },
   { code: 'en-GB', name: '🇬🇧 English (UK)' },
   { code: 'en-US', name: '🇺🇸 English (US)' },
+  { code: 'pl-PL', name: '🇵🇱 Polish' },
 ];
 
 const LANGUAGES_TR = [
@@ -29,6 +31,15 @@ const LANGUAGES_TR = [
   { code: 'tr-TR', name: '🇹🇷 Türkçe' },
   { code: 'en-GB', name: '🇬🇧 İngilizce (UK)' },
   { code: 'en-US', name: '🇺🇸 İngilizce (US)' },
+  { code: 'pl-PL', name: '🇵🇱 Lehçe' },
+];
+
+const LANGUAGES_PL = [
+  { code: 'fr-FR', name: '🇫🇷 Francuski' },
+  { code: 'tr-TR', name: '🇹🇷 Turecki' },
+  { code: 'en-GB', name: '🇬🇧 Angielski (UK)' },
+  { code: 'en-US', name: '🇺🇸 Angielski (US)' },
+  { code: 'pl-PL', name: '🇵🇱 Polski' },
 ];
 
 export default function VoiceInput({ onTranscript, onCopyToText }: VoiceInputProps) {
@@ -36,7 +47,14 @@ export default function VoiceInput({ onTranscript, onCopyToText }: VoiceInputPro
   const { t, language } = useLanguage();
   const { dark } = useDarkMode();
   const { isListening, setIsListening, transcript, setTranscript, isSupported, error } = useSpeechRecognition({ language: selectedLang });
-  const LANGUAGES = language === 'en' ? LANGUAGES_EN : language === 'tr' ? LANGUAGES_TR : LANGUAGES_FR;
+  const LANGUAGES =
+    language === 'en'
+      ? LANGUAGES_EN
+      : language === 'tr'
+        ? LANGUAGES_TR
+        : language === 'pl'
+          ? LANGUAGES_PL
+          : LANGUAGES_FR;
 
   const handleToggle = () => {
     if (isListening) {
@@ -57,8 +75,7 @@ export default function VoiceInput({ onTranscript, onCopyToText }: VoiceInputPro
   if (!isSupported) {
     return (
       <div className="p-4 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
-        La reconnaissance vocale n'est pas supportée par votre navigateur.
-        Veuillez utiliser Chrome ou Edge.
+        {t.dashboard.voiceUnsupported}
       </div>
     );
   }
@@ -135,12 +152,12 @@ export default function VoiceInput({ onTranscript, onCopyToText }: VoiceInputPro
             onClick={() => onCopyToText(transcript)}
             className="shrink-0 flex items-center justify-center gap-1 px-3 py-3 rounded-xl text-xs font-semibold transition-all hover:shadow-md hover:scale-[1.01] cursor-pointer"
             style={{ background: 'rgba(91,164,176,0.12)', color: '#5ba4b0', border: '1px solid rgba(91,164,176,0.3)' }}
-            title="Copier dans la zone texte"
+            title={t.dashboard.copyToText}
           >
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            Texte
+            {t.dashboard.text}
           </button>
         )}
       </div>

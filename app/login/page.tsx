@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/contexts/LanguageContext'
 import LanguageSelector from '@/components/LanguageSelector'
+import { DarkModeToggle } from '@/components/DarkModeToggle'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -32,13 +33,13 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
+      <div className="absolute top-6 left-6">
+        <DarkModeToggle variant="overlay" />
+      </div>
       <div className="absolute top-6 right-6">
         <LanguageSelector variant="compact" />
       </div>
       <div className="auth-card">
-        <p className="text-xs uppercase tracking-[0.14em] mb-3" style={{ color: 'var(--indigo)' }}>
-          Sign Platform
-        </p>
         <h1>{t.auth.loginTitle}</h1>
         <p className="sub">{t.auth.loginSubtitle}</p>
 
@@ -79,15 +80,15 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-sm" style={{ color: 'var(--ink-muted)' }}>
-          {t.auth.noAccount}{' '}
-          <Link href="/register" style={{ color: 'var(--indigo)', fontWeight: 600 }}>
-            {t.auth.createLink}
+        <div className="auth-card-foot">
+          <p className="text-center">
+            {t.auth.noAccount}{' '}
+            <Link href="/register">{t.auth.createLink}</Link>
+          </p>
+          <Link href="/" className="auth-back text-center">
+            {t.auth.backHome}
           </Link>
-        </p>
-        <Link href="/" className="block mt-3 text-sm" style={{ color: 'var(--ink-muted)' }}>
-          {t.auth.backHome}
-        </Link>
+        </div>
       </div>
     </div>
   )

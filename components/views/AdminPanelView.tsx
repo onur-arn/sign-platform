@@ -2,9 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { SIGN_LABELS_FR } from '@/lib/signLabels'
+import { displayParts } from '@/lib/userName'
+
+const SIGNS_COUNT = Object.keys(SIGN_LABELS_FR).length
 
 interface UserRow {
   id: string
+  firstName?: string | null
+  lastName?: string | null
   name: string | null
   email: string
   status: string
@@ -12,26 +18,46 @@ interface UserRow {
   createdAt: string
 }
 
+function statusClass(status: string) {
+  if (status === 'APPROVED') return 'admin-badge admin-badge-ok'
+  if (status === 'REJECTED') return 'admin-badge admin-badge-no'
+  return 'admin-badge admin-badge-wait'
+}
+
 export default function AdminPanelView() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [users, setUsers] = useState<UserRow[]>([])
+  const [protectedEmail, setProtectedEmail] = useState<string | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+
+  const locale =
+    language === 'tr'
+      ? 'tr-TR'
+      : language === 'en'
+        ? 'en-GB'
+        : language === 'pl'
+          ? 'pl-PL'
+          : 'fr-FR'
+
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/stats')
       if (!res.ok) {
-        setError('Impossible de charger les utilisateurs')
+        setError(t.dashboard.loadUsersError)
         return
       }
       const data = await res.json()
       setUsers(data.users ?? [])
+      setProtectedEmail(data.protectedAdminEmail ?? null)
+      setLastUpdate(new Date())
       setError(null)
     } catch {
-      setError('Erreur réseau')
+      setError(t.dashboard.networkError)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     refresh()
@@ -53,114 +79,155 @@ export default function AdminPanelView() {
     await refresh()
   }
 
+  const person = (u: UserRow) => displayParts(u)
+
   return (
     <div className="space-y-5">
-      <div className="panel">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="panel-title">{t.admin.title}</h2>
-            <p className="panel-desc" style={{ marginBottom: 0 }}>
-              {users.length} utilisateurs
-            </p>
-          </div>
-          <button type="button" className="btn btn-ghost" onClick={refresh}>
+      <div className="admin-stats">
+        <div className="panel admin-stat">
+          <p className="panel-desc" style={{ marginBottom: 0 }}>
+            {t.admin.users}
+          </p>
+          <p className="admin-stat-value">{users.length}</p>
+        </div>
+        <div className="panel admin-stat">
+          <p className="panel-desc" style={{ marginBottom: 0 }}>
+            {t.admin.availableWords}
+          </p>
+          <p className="admin-stat-value">{SIGNS_COUNT}</p>
+        </div>
+        <div className="admin-refresh">
+          <p className="text-xs" style={{ color: 'var(--text-sub)' }}>
+            {t.admin.lastUpdate}
+          </p>
+          <p className="font-mono text-xs" style={{ color: 'var(--text-sub)' }}>
+            {lastUpdate
+              ? lastUpdate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              : '—'}
+          </p>
+          <button type="button" className="btn btn-ghost mt-2" onClick={refresh}>
             {t.admin.refresh}
           </button>
         </div>
-        {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
       </div>
+      {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
 
       {pending.length > 0 && (
-        <div className="panel">
-          <h3 className="font-display text-lg mb-3">{t.admin.pendingSection}</h3>
+        <div className="panel admin-pending">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg m-0">{t.admin.pendingSection}</h3>
+            <span className="admin-count">{pending.length}</span>
+          </div>
           <ul className="space-y-2">
-            {pending.map((u) => (
-              <li
-                key={u.id}
-                className="flex flex-wrap items-center justify-between gap-2 py-2"
-                style={{ borderBottom: '1px solid var(--line)' }}
-              >
-                <div>
-                  <strong>{u.name ?? '—'}</strong>
-                  <div style={{ color: 'var(--ink-muted)', fontSize: '0.85rem' }}>{u.email}</div>
-                </div>
-                <div className="flex gap-2">
+            {pending.map((u) => {
+              const { firstName, lastName } = person(u)
+              return (
+                <li key={u.id} className="admin-user-row">
+                  <div>
+                    <strong>
+                      {firstName} {lastName}
+                    </strong>
+                    <div style={{ color: 'var(--text-sub)', fontSize: '0.85rem' }}>{u.email}</div>
+                    <div style={{ color: 'var(--text-sub)', fontSize: '0.75rem' }}>
+                      {new Date(u.createdAt).toLocaleString(locale)}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={loadingId === u.id}
+                      onClick={() => act('/api/admin/approve', { userId: u.id, action: 'approve' }, u.id)}
+                    >
+                      {loadingId === u.id ? '…' : t.admin.approve}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={loadingId === u.id}
+                      onClick={() => act('/api/admin/approve', { userId: u.id, action: 'reject' }, u.id)}
+                    >
+                      {t.admin.reject}
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {rejected.length > 0 && (
+        <div className="panel admin-rejected">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-lg m-0">{t.admin.rejectedSection}</h3>
+            <span className="admin-count admin-count-no">{rejected.length}</span>
+          </div>
+          <ul className="space-y-2">
+            {rejected.map((u) => {
+              const { firstName, lastName } = person(u)
+              return (
+                <li key={u.id} className="admin-user-row">
+                  <div>
+                    <strong>
+                      {firstName} {lastName}
+                    </strong>
+                    <div style={{ color: 'var(--text-sub)', fontSize: '0.85rem' }}>{u.email}</div>
+                  </div>
                   <button
                     type="button"
                     className="btn btn-primary"
                     disabled={loadingId === u.id}
                     onClick={() => act('/api/admin/approve', { userId: u.id, action: 'approve' }, u.id)}
                   >
-                    {t.admin.approve}
+                    {t.admin.approveAnyway}
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={loadingId === u.id}
-                    onClick={() => act('/api/admin/approve', { userId: u.id, action: 'reject' }, u.id)}
-                  >
-                    {t.admin.reject}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {rejected.length > 0 && (
-        <div className="panel">
-          <h3 className="font-display text-lg mb-3">{t.admin.rejectedSection}</h3>
-          <ul className="space-y-2">
-            {rejected.map((u) => (
-              <li key={u.id} className="flex justify-between gap-2 py-2" style={{ borderBottom: '1px solid var(--line)' }}>
-                <span>{u.email}</span>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={loadingId === u.id}
-                  onClick={() => act('/api/admin/approve', { userId: u.id, action: 'approve' }, u.id)}
-                >
-                  {t.admin.approveAnyway}
-                </button>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
 
       <div className="panel">
-        <h3 className="font-display text-lg mb-3">{t.admin.usersTable}</h3>
+        <h3 className="text-lg mb-3">
+          {t.admin.usersTable} ({users.length})
+        </h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="admin-table">
             <thead>
-              <tr style={{ color: 'var(--ink-muted)', textAlign: 'left' }}>
-                <th className="py-2">Nom</th>
-                <th>Email</th>
-                <th>Statut</th>
-                <th>Rôle</th>
-                <th />
+              <tr>
+                <th>{t.admin.colFirstName}</th>
+                <th>{t.admin.colLastName}</th>
+                <th>{t.admin.colEmail}</th>
+                <th>{t.admin.colStatus}</th>
+                <th>{t.admin.colRole}</th>
+                <th>{t.admin.colAdminAccess}</th>
+                <th>{t.admin.colCreated}</th>
+                <th>{t.admin.colAction}</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u.id} style={{ borderTop: '1px solid var(--line)' }}>
-                  <td className="py-2">{u.name ?? '—'}</td>
-                  <td>{u.email}</td>
-                  <td>{u.status}</td>
-                  <td>{u.role}</td>
-                  <td className="py-2">
-                    <div className="flex gap-2 justify-end">
-                      {u.role !== 'ADMIN' ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          disabled={loadingId === u.id}
-                          onClick={() => act('/api/admin/role', { userId: u.id, role: 'ADMIN' }, u.id)}
-                        >
-                          {t.admin.grantAccess}
-                        </button>
-                      ) : (
+              {users.map((u) => {
+                const { firstName, lastName } = person(u)
+                const isProtected = protectedEmail && u.email === protectedEmail
+                return (
+                  <tr key={u.id}>
+                    <td>{firstName || '—'}</td>
+                    <td>{lastName || '—'}</td>
+                    <td>{u.email}</td>
+                    <td>
+                      <span className={statusClass(u.status)}>{u.status}</span>
+                    </td>
+                    <td>
+                      <span className={u.role === 'ADMIN' ? 'admin-badge admin-badge-role' : 'admin-badge'}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td>
+                      {isProtected ? (
+                        <span style={{ color: 'var(--text-sub)', fontSize: '0.8rem' }}>{t.admin.mainAccount}</span>
+                      ) : u.role === 'ADMIN' ? (
                         <button
                           type="button"
                           className="btn btn-ghost"
@@ -169,24 +236,38 @@ export default function AdminPanelView() {
                         >
                           {t.admin.revokeAccess}
                         </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={loadingId === u.id}
+                          onClick={() => act('/api/admin/role', { userId: u.id, role: 'ADMIN' }, u.id)}
+                        >
+                          {t.admin.grantAccess}
+                        </button>
                       )}
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        disabled={loadingId === u.id}
-                        onClick={() => {
-                          if (confirm(`${t.admin.deleteConfirm} "${u.email}" ?`)) {
-                            act('/api/admin/delete-user', { userId: u.id }, u.id)
-                          }
-                        }}
-                        style={{ color: 'var(--danger)' }}
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>{new Date(u.createdAt).toLocaleDateString(locale)}</td>
+                    <td>
+                      {!isProtected && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={loadingId === u.id}
+                          onClick={() => {
+                            if (confirm(`${t.admin.deleteConfirm} "${u.email}" ?`)) {
+                              act('/api/admin/delete-user', { userId: u.id }, u.id)
+                            }
+                          }}
+                          style={{ color: 'var(--danger)' }}
+                        >
+                          {t.admin.deleteAccount}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

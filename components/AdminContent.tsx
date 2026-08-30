@@ -26,7 +26,7 @@ interface AdminContentProps {
 }
 
 export default function AdminContent(initial: AdminContentProps) {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const { dark } = useDarkMode();
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -137,7 +137,7 @@ export default function AdminContent(initial: AdminContentProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold" style={{ color: textSub }}>
-                    {language === 'fr' ? 'Mots disponibles' : language === 'tr' ? 'Mevcut kelimeler' : 'Available words'}
+                    {t.admin.availableWords}
                   </p>
                   <p className="text-4xl font-bold mt-2" style={{ color: textMain }}>{SIGNS_COUNT}</p>
                 </div>
@@ -260,7 +260,7 @@ export default function AdminContent(initial: AdminContentProps) {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {user.email === 'secretaire@youthstation.org' ? (
+                      {user.email === process.env.NEXT_PUBLIC_PROTECTED_ADMIN_EMAIL ? (
                         <span className="px-3 py-1.5 text-xs italic" style={{ color: textSub }}>{t.admin.mainAccount}</span>
                       ) : user.role === 'ADMIN' ? (
                         <button onClick={() => handleRoleChange(user.id, 'USER')} disabled={loadingId === user.id}
@@ -280,7 +280,7 @@ export default function AdminContent(initial: AdminContentProps) {
                       {new Date(user.createdAt).toLocaleDateString('fr-FR')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {user.email !== 'secretaire@youthstation.org' && (
+                      {user.email !== process.env.NEXT_PUBLIC_PROTECTED_ADMIN_EMAIL && (
                         <button onClick={() => handleDelete(user.id, user.email)} disabled={loadingId === user.id}
                           className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-500 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
                           {loadingId === user.id ? '…' : `🗑 ${t.admin.deleteAccount}`}

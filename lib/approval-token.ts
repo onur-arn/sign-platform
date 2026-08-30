@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 const EXPIRY_MS = 48 * 60 * 60 * 1000;
 
 export function generateApprovalToken(userId: string, action: 'approve' | 'reject'): string {
-  const secret = process.env.ADMIN_SECRET;
+  const secret = process.env.ADMIN_SECRET || process.env.NEXTAUTH_SECRET;
   if (!secret) throw new Error('ADMIN_SECRET manquant');
   const ts = Date.now().toString();
   const payload = `${userId}.${action}.${ts}`;
@@ -12,7 +12,7 @@ export function generateApprovalToken(userId: string, action: 'approve' | 'rejec
 }
 
 export function validateApprovalToken(token: string): { userId: string; action: string } | null {
-  const secret = process.env.ADMIN_SECRET;
+  const secret = process.env.ADMIN_SECRET || process.env.NEXTAUTH_SECRET;
   if (!secret) return null;
   try {
     const decoded = Buffer.from(token, 'base64url').toString();

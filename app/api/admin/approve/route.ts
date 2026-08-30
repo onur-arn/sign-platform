@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         ${status === 'APPROVED' ? '✓ Compte approuvé' : '✗ Compte rejeté'}
       </h2>
       <p>${user.email}</p>
-      <a href="${process.env.NEXTAUTH_URL}/admin" style="color:#7c3aed">← Retour au panneau admin</a>
+      <a href="${process.env.NEXTAUTH_URL}/dashboard?tab=admin" style="color:#5ba4b0">← Retour au panneau admin</a>
     </body></html>
   `, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }

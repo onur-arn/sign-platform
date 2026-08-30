@@ -92,6 +92,7 @@ interface FemaleAvatarProps {
   isPlaying: boolean
   fps?: number
   onDone?: () => void
+  onLoad?: () => void
   idleFrame?: SignFrame | null
   transitionFrame?: SignFrame | null
   activeSign?: string | null
@@ -109,12 +110,15 @@ export default function FemaleSignLanguageAvatar({
   isPlaying,
   fps = 25,
   onDone,
+  onLoad,
   idleFrame,
   transitionFrame,
   activeSign,
   modelUrl = '/avatar_female.glb',
   prepareOptions = null,
 }: FemaleAvatarProps) {
+  const onLoadRef = useRef(onLoad)
+  onLoadRef.current = onLoad
   const { scene: gltfScene } = useGLTF(modelUrl)
   const scene = useMemo(() => {
     try {
@@ -219,12 +223,19 @@ export default function FemaleSignLanguageAvatar({
     })
 
     setReady(true)
+    onLoadRef.current?.()
   }, [scene])
 
+  // Quand le frame idle (comprendre) arrive, invalider le fallback bras-bas
+  useEffect(() => {
+    if (!idleFrame?.pose) return
+    naturalIdleQuats.current = {}
+    idleQuats.current = {}
+  }, [idleFrame])
 
   // Pré-calcule les quats du frame 0 du signe suivant pour l'outro blend
   useEffect(() => {
-    if (!transitionFrame || Object.keys(bones.current).length === 0) {
+    if (!transitionFrame?.pose || Object.keys(bones.current).length === 0) {
       transitionQuats.current = {}
       return
     }
@@ -292,7 +303,7 @@ export default function FemaleSignLanguageAvatar({
     }
 
     // 2. Même idle que Mixamo ♂ : frame « comprendre » + ouverture
-    if (idleFrame && Object.keys(bones.current).length > 0) {
+    if (idleFrame?.pose && Object.keys(bones.current).length > 0) {
       applyFrame(idleFrame, bones.current, restQuats.current)
       if (prepareOptions?.armOpen && prepareOptions.armOpen > 0) {
         openArmsOutward(scene, prepareOptions.armOpen)
@@ -493,10 +504,14 @@ export default function FemaleSignLanguageAvatar({
     if (currentIdx !== lastCapturedIdx.current) {
       lastCapturedIdx.current = currentIdx
 
+      const frameA = frames[currentIdx]
+      const frameB = frames[nextIdx]
+      if (!frameA?.pose || !frameB?.pose) return
+
       const frozenA = frozenSidesPerFrame.current[currentIdx] ?? new Set<'Left' | 'Right'>()
       const frozenB = frozenSidesPerFrame.current[nextIdx]    ?? new Set<'Left' | 'Right'>()
 
-      applyFrame(frames[currentIdx], bones.current, restQuats.current)
+      applyFrame(frameA, bones.current, restQuats.current)
       for (const [name, bone] of Object.entries(bones.current)) {
         if (!frameAQuats.current[name]) frameAQuats.current[name] = new THREE.Quaternion()
         frameAQuats.current[name].copy(bone.quaternion)
@@ -507,7 +522,7 @@ export default function FemaleSignLanguageAvatar({
         }
       }
 
-      applyFrame(frames[nextIdx], bones.current, restQuats.current)
+      applyFrame(frameB, bones.current, restQuats.current)
       for (const [name, bone] of Object.entries(bones.current)) {
         if (!frameBQuats.current[name]) frameBQuats.current[name] = new THREE.Quaternion()
         frameBQuats.current[name].copy(bone.quaternion)
@@ -846,6 +861,7 @@ function applyFrame(
   }
 
   const { pose, left_hand, right_hand } = frame
+  if (!pose || pose.length < 25) return
 
   if (pose.length >= 25) {
     // Auto-calibrate z scale: normalize so nose depth = TARGET_NOSE_Z shoulder-widths.

@@ -1,13 +1,14 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export type DashboardTab =
   | 'traduire'
   | 'dictionnaire'
   | 'documents'
   | 'avatar'
-  | 'parametres'
+  | 'information'
   | 'admin'
 
 type NavItem = {
@@ -42,10 +43,20 @@ const icons = {
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
-  parametres: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+  information: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9.25" stroke="currentColor" strokeWidth="1.75" />
+      <text
+        x="12"
+        y="16"
+        textAnchor="middle"
+        fill="currentColor"
+        fontSize="12"
+        fontWeight="700"
+        fontFamily="Georgia, 'Times New Roman', serif"
+      >
+        i
+      </text>
     </svg>
   ),
   admin: (
@@ -62,8 +73,27 @@ type Props = {
   open: boolean
   onClose: () => void
   onLogout: () => void
-  labels: Record<DashboardTab, string>
-  logoutLabel: string
+}
+
+function NavButton({
+  item,
+  active,
+  onClick,
+}: {
+  item: NavItem
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`nav-item ${active ? 'active' : ''}`}
+      onClick={onClick}
+    >
+      {item.icon}
+      <span>{item.label}</span>
+    </button>
+  )
 }
 
 export default function Sidebar({
@@ -73,61 +103,83 @@ export default function Sidebar({
   open,
   onClose,
   onLogout,
-  labels,
-  logoutLabel,
 }: Props) {
-  const items: NavItem[] = [
-    { id: 'traduire', label: labels.traduire, icon: icons.traduire },
-    { id: 'dictionnaire', label: labels.dictionnaire, icon: icons.dictionnaire },
-    { id: 'documents', label: labels.documents, icon: icons.documents },
-    { id: 'avatar', label: labels.avatar, icon: icons.avatar },
-    { id: 'parametres', label: labels.parametres, icon: icons.parametres },
-    { id: 'admin', label: labels.admin, icon: icons.admin, adminOnly: true },
+  const { t } = useLanguage()
+
+  const mainItems: NavItem[] = [
+    { id: 'traduire', label: t.dashboard.navTranslate, icon: icons.traduire },
+    { id: 'dictionnaire', label: t.dashboard.navDictionary, icon: icons.dictionnaire },
+    { id: 'documents', label: t.dashboard.navDocuments, icon: icons.documents },
   ]
+
+  const footItems: NavItem[] = [
+    { id: 'avatar', label: t.dashboard.navAvatar, icon: icons.avatar },
+    { id: 'information', label: t.dashboard.navInformation, icon: icons.information },
+    { id: 'admin', label: t.dashboard.navAdmin, icon: icons.admin, adminOnly: true },
+  ]
+
+  const selectTab = (id: DashboardTab) => {
+    onChange(id)
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches) {
+      onClose()
+    }
+  }
+
+  const visibleFoot = footItems.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <>
       {open && (
         <button
           type="button"
-          aria-label="Fermer le menu"
-          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          aria-label={t.dashboard.closeMenu}
+          className="sidebar-backdrop"
           onClick={onClose}
         />
       )}
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="sidebar-brand">
-          <div className="brand-mark">Sign</div>
-          <div className="brand-sub">Platform</div>
+          <div className="brand-mark">
+            {t.dashboard.titlePrefix ? (
+              <>
+                <span>{t.dashboard.titlePrefix}</span> {t.dashboard.title}
+              </>
+            ) : (
+              <>
+                {t.dashboard.title} <span>{t.dashboard.titleBold}</span>
+              </>
+            )}
+          </div>
         </div>
 
         <nav className="sidebar-nav">
-          {items
-            .filter((item) => !item.adminOnly || isAdmin)
-            .map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`nav-item ${active === item.id ? 'active' : ''}`}
-                onClick={() => {
-                  onChange(item.id)
-                  onClose()
-                }}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            ))}
+          {mainItems.map((item) => (
+            <NavButton
+              key={item.id}
+              item={item}
+              active={active === item.id}
+              onClick={() => selectTab(item.id)}
+            />
+          ))}
         </nav>
 
         <div className="sidebar-foot">
+          {visibleFoot.map((item) => (
+            <NavButton
+              key={item.id}
+              item={item}
+              active={active === item.id}
+              onClick={() => selectTab(item.id)}
+            />
+          ))}
+          <div className="sidebar-foot-divider" aria-hidden />
           <button type="button" className="nav-item" onClick={onLogout}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>{logoutLabel}</span>
+            <span>{t.dashboard.logout}</span>
           </button>
         </div>
       </aside>

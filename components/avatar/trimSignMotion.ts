@@ -161,6 +161,9 @@ function lerpLmArray(
 
 /** Interpolation linéaire des landmarks (chemin spatial, sans arc de quaternion). */
 export function lerpSignFrame(a: SignFrame, b: SignFrame, t: number): SignFrame {
+  if (!a?.pose && !b?.pose) return { pose: [] }
+  if (!a?.pose) return b
+  if (!b?.pose) return a
   const tt = Math.min(1, Math.max(0, t))
   return {
     pose: lerpLmArray(a.pose, b.pose, tt)!,

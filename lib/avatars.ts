@@ -10,17 +10,17 @@ export type AvatarOption = {
   pipeline: AvatarPipeline
 }
 
-/** Avatars avec prénoms turcs (Ahmet conservé). */
+/** Avatars — prénoms internationaux (TR / PL / FR / EN). Ahmet, Emre, Eva conservés. */
 export const AVATAR_OPTIONS: AvatarOption[] = [
   { id: 'emre', label: 'Emre', url: null, prepare: null, pipeline: 'male' },
-  { id: 'elif', label: 'Elif', url: '/avatar_female.glb', prepare: { bakeScale: true }, pipeline: 'female' },
+  { id: 'elif', label: 'Maya', url: '/avatar_female.glb', prepare: { bakeScale: true }, pipeline: 'female' },
+  { id: 'kaan', label: 'Max', url: '/avatar_black.glb', prepare: { bakeScale: true, naturalArms: true }, pipeline: 'male' },
+  { id: 'zeynep', label: 'Lara', url: '/avatar_hellen.glb', prepare: { bakeScale: false, armOpen: 0.06 }, pipeline: 'female' },
+  { id: 'burak', label: 'Adam', url: '/avatar_rpm_male.glb', prepare: { bakeScale: true, naturalArms: true, armsOnly: true, armOpen: 0.01 }, pipeline: 'male' },
+  { id: 'deniz', label: 'Eva', url: '/avatar_rpm_female.glb', prepare: { bakeScale: true, naturalArms: true, armsOnly: true, armOpen: 0.06 }, pipeline: 'male' },
   { id: 'ahmet', label: 'Ahmet', url: '/avatar_ahmet.glb', prepare: { bakeScale: false }, pipeline: 'female' },
-  { id: 'zeynep', label: 'Zeynep', url: '/avatar_hellen.glb', prepare: { bakeScale: false, armOpen: 0.06 }, pipeline: 'female' },
-  { id: 'yusuf', label: 'Yusuf', url: '/avatar_harry.glb', prepare: null, pipeline: 'female' },
-  { id: 'burak', label: 'Burak', url: '/avatar_rpm_male.glb', prepare: { bakeScale: true, naturalArms: true, armsOnly: true, armOpen: 0.01 }, pipeline: 'male' },
-  { id: 'deniz', label: 'Deniz', url: '/avatar_rpm_female.glb', prepare: { bakeScale: true, naturalArms: true, armsOnly: true, armOpen: 0.06 }, pipeline: 'male' },
-  { id: 'selin', label: 'Selin', url: '/avatar_rpm_female2.glb', prepare: { bakeScale: true, naturalArms: true, armsOnly: true, armOpen: 0.06 }, pipeline: 'male' },
-  { id: 'kaan', label: 'Kaan', url: '/avatar_black.glb', prepare: { bakeScale: true, naturalArms: true }, pipeline: 'male' },
+  { id: 'selin', label: 'Nina', url: '/avatar_rpm_female2.glb', prepare: { bakeScale: true, naturalArms: true, armsOnly: true, armOpen: 0.06 }, pipeline: 'male' },
+  { id: 'yusuf', label: 'Leo', url: '/avatar_harry.glb', prepare: null, pipeline: 'female' },
 ]
 
 export const DEFAULT_AVATAR_ID = 'emre'

@@ -3,15 +3,21 @@
 import { useMemo, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { SIGN_LABELS_FR, SIGN_LABELS_EN, SIGN_LABELS_TR } from '@/lib/signLabels'
+import { SIGN_LABELS_FR, SIGN_LABELS_EN, SIGN_LABELS_TR, SIGN_LABELS_PL } from '@/lib/signLabels'
+import AvatarLoadingOverlay from '@/components/avatar/AvatarLoadingOverlay'
+
+function AvatarChunkFallback() {
+  const { t } = useLanguage()
+  return (
+    <div className="avatar-canvas relative overflow-hidden">
+      <AvatarLoadingOverlay label={t.dashboard.avatarLoadingFull} />
+    </div>
+  )
+}
 
 const SignAvatarPlayer = dynamic(() => import('@/components/avatar/SignAvatarPlayer'), {
   ssr: false,
-  loading: () => (
-    <div className="avatar-canvas" style={{ display: 'grid', placeItems: 'center', minHeight: 360 }}>
-      <p style={{ color: 'var(--ink-muted)' }}>…</p>
-    </div>
-  ),
+  loading: () => <AvatarChunkFallback />,
 })
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -33,6 +39,7 @@ export default function DictionnaireView() {
 
   const labelsMap = useMemo(() => {
     if (language === 'en') return SIGN_LABELS_EN
+    if (language === 'pl') return SIGN_LABELS_PL
     if (language === 'tr') return SIGN_LABELS_TR
     return SIGN_LABELS_FR
   }, [language])
@@ -62,7 +69,7 @@ export default function DictionnaireView() {
   }, [])
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,380px)]">
+    <div className="view-grid">
       <div className="panel">
         <h2 className="panel-title">{t.admin.dictionary}</h2>
         <p className="panel-desc">
@@ -70,7 +77,7 @@ export default function DictionnaireView() {
         </p>
 
         <input
-          className="field mb-4"
+          className="field mb-3"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t.admin.dictionarySearch}
@@ -106,9 +113,9 @@ export default function DictionnaireView() {
         )}
 
         {displayed.length === 0 ? (
-          <p style={{ color: 'var(--ink-muted)' }}>{t.admin.dictionaryNoResult}</p>
+          <p style={{ color: 'var(--text-sub)' }}>{t.admin.dictionaryNoResult}</p>
         ) : (
-          <div className="dict-grid max-h-[520px] overflow-y-auto pr-1">
+          <div className="dict-grid max-h-[480px] overflow-y-auto pr-1">
             {displayed.slice(0, 400).map((s) => (
               <button
                 key={s.signId}
@@ -123,17 +130,15 @@ export default function DictionnaireView() {
         )}
       </div>
 
-      <div className="panel" style={{ padding: '0.85rem' }}>
+      <div className="panel">
+        <h2 className="panel-title">
+          {selected ? (labelsMap[selected.id] ?? selected.label) : t.dashboard.result}
+        </h2>
         {selected ? (
-          <>
-            <p className="mb-2 font-semibold" style={{ color: 'var(--indigo)' }}>
-              {selected.label}
-            </p>
-            <SignAvatarPlayer text="" ts={selected.ts} signId={selected.id} />
-          </>
+          <SignAvatarPlayer text="" ts={selected.ts} signId={selected.id} language={language} />
         ) : (
-          <div className="avatar-canvas" style={{ display: 'grid', placeItems: 'center', minHeight: 360 }}>
-            <p style={{ color: 'var(--ink-muted)' }}>Sélectionnez un signe</p>
+          <div className="avatar-canvas" style={{ display: 'grid', placeItems: 'center' }}>
+            <p style={{ color: '#94a3b8' }}>{t.dashboard.selectSign}</p>
           </div>
         )}
       </div>

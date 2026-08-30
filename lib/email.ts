@@ -1,36 +1,60 @@
 import nodemailer from 'nodemailer';
 import { generateApprovalToken } from './approval-token';
 
-function getTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
+function mailAuth() {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER
+  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD
+  return user && pass ? { user, pass } : null
 }
 
-const FROM = `"Sign Language" <${process.env.GMAIL_USER}>`;
+function getTransporter() {
+  const auth = mailAuth()
+  if (!auth) return null
+  if (process.env.SMTP_HOST) {
+    const port = Number(process.env.SMTP_PORT || 587)
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      secure: port === 465,
+      auth,
+    })
+  }
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth,
+  })
+}
 
-export async function sendApprovalRequestEmail(newUser: { name: string | null; email: string; id: string }) {
+const FROM = `"Sign Language" <${process.env.SMTP_USER || process.env.GMAIL_USER}>`;
+
+export async function sendApprovalRequestEmail(newUser: {
+  name: string | null
+  firstName?: string | null
+  lastName?: string | null
+  email: string
+  id: string
+}) {
   const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminEmail || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
+  const transporter = getTransporter()
+  if (!adminEmail || !transporter) return;
 
   const approveToken = generateApprovalToken(newUser.id, 'approve');
   const rejectToken  = generateApprovalToken(newUser.id, 'reject');
   const base = process.env.NEXTAUTH_URL;
   const approveUrl = `${base}/api/admin/approve?token=${approveToken}`;
   const rejectUrl  = `${base}/api/admin/approve?token=${rejectToken}`;
+  const firstName = (newUser.firstName || '').trim()
+  const lastName = (newUser.lastName || '').trim()
 
-  const info = await getTransporter().sendMail({
+  const info = await transporter.sendMail({
     from: FROM,
     to: adminEmail,
     subject: `Nouvelle demande d'inscription — ${newUser.name || newUser.email}`,
     html: `
       <div style="font-family:sans-serif;max-width:500px;margin:auto;">
         <h2 style="color:#5ba4b0;">Nouvelle demande d'inscription</h2>
-        <p><strong>Nom :</strong> ${newUser.name || '—'}</p>
+        <p><strong>Prénom :</strong> ${firstName || '—'}</p>
+        <p><strong>Nom :</strong> ${lastName || '—'}</p>
         <p><strong>Email :</strong> ${newUser.email}</p>
         <p><strong>Date :</strong> ${new Date().toLocaleString('fr-FR')}</p>
         <div style="margin-top:24px;">
@@ -44,7 +68,7 @@ export async function sendApprovalRequestEmail(newUser: { name: string | null; e
         </div>
         <p style="margin-top:20px;color:#64748b;font-size:12px;">
           Lien valable 48 heures. Vous pouvez aussi gérer les demandes depuis
-          <a href="${base}/admin">le panneau admin</a>.
+          <a href="${base}/dashboard?tab=admin">le panneau admin</a>.
         </p>
       </div>
     `,
@@ -53,10 +77,11 @@ export async function sendApprovalRequestEmail(newUser: { name: string | null; e
 }
 
 export async function sendStatusEmail(userEmail: string, approved: boolean) {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
+  const transporter = getTransporter()
+  if (!transporter) return;
   const base = process.env.NEXTAUTH_URL;
 
-  const info = await getTransporter().sendMail({
+  const info = await transporter.sendMail({
     from: FROM,
     to: userEmail,
     subject: approved ? 'Votre compte a été approuvé' : 'Votre demande a été refusée',

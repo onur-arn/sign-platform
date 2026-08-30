@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sign Platform
 
-## Getting Started
+Next.js — traduction vers la langue des signes (avatars 3D), auth NextAuth, Prisma/Postgres.
 
-First, run the development server:
+## Dev local
 
+1. Postgres (Docker) : `docker compose up -d`  
+   ou [Neon](https://console.neon.tech) (gratuit) — copier l’URL dans `.env`
+2. `cp .env.example .env` puis renseigner les secrets
+3. `npm install`
+4. `npx prisma migrate deploy && npm run db:seed`
+5. `npm run dev` → http://localhost:3000
+
+## Déploiement Vercel (checklist)
+
+### 1. Base Postgres (Neon)
+1. Créer un projet sur https://console.neon.tech
+2. Copier **pooled** → `DATABASE_URL` et **direct** → `DIRECT_URL` (sslmode=require)
+
+### 2. GitHub
+Pousser ce repo sur `origin` (`main`).
+
+### 3. Projet Vercel
+1. https://vercel.com/new → importer le repo
+2. Framework : Next.js (détecté)
+3. Build : `npm run vercel-build` (déjà dans `vercel.json`)
+
+### 4. Variables d’environnement (Production)
+| Variable | Exemple / note |
+|----------|----------------|
+| `DATABASE_URL` | Neon pooled |
+| `DIRECT_URL` | Neon direct |
+| `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | `https://xxx.vercel.app` puis ton domaine |
+| `NEXT_PUBLIC_SIGNS_CDN` | URL R2 des signes |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | mails |
+| `ADMIN_EMAIL` | destinataire des demandes |
+| `ADMIN_SECRET` | secret liens approve (ou = NEXTAUTH_SECRET) |
+| `PROTECTED_ADMIN_EMAIL` | admin non supprimable |
+| `NEXT_PUBLIC_PROTECTED_ADMIN_EMAIL` | idem côté UI |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | seed au premier setup |
+| `ANTHROPIC_API_KEY` | optionnel (synonymes) |
+
+### 5. Après le 1er deploy
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# depuis ta machine, avec DATABASE_URL prod :
+npx prisma migrate deploy
+npm run db:seed
 ```
+(ou laisser `vercel-build` faire `migrate deploy` à chaque build)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 6. Domaine
+Vercel → Domains → ajouter le domaine → DNS chez le registrar → mettre à jour `NEXTAUTH_URL` → redeploy.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 7. Tests
+Landing, register, mail approve, login, traduction avatar, upload PDF, panneau admin.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Sécu intégrée
+- Rate limit (register / login / segment / upload / translate)
+- Mots de passe ≥ 10 + lettre + chiffre
+- Honeypot anti-bot inscription
+- Middleware auth sur `/dashboard` et `/admin`
+- Headers HSTS / CSP / nosniff
+- Comptes en attente d’approbation admin
