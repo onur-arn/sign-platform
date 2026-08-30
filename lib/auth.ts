@@ -5,6 +5,7 @@ import { prisma } from "./db";
 import { fullName } from "./userName";
 import { rateLimit } from "./rate-limit";
 import { RATE } from "./request-limits";
+import { AuthErrorCode } from "./authErrors";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -16,7 +17,7 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email et mot de passe requis");
+          throw new Error(AuthErrorCode.CREDENTIALS_REQUIRED);
         }
 
         const email = credentials.email.trim().toLowerCase();
@@ -26,7 +27,7 @@ export const authOptions: NextAuthOptions = {
           RATE.login.windowMs,
         );
         if (!limited.ok) {
-          throw new Error("Trop de tentatives. Réessayez dans quelques minutes.");
+          throw new Error(AuthErrorCode.RATE_LIMITED);
         }
 
         try {
@@ -35,19 +36,19 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!user) {
-            throw new Error("Email ou mot de passe incorrect");
+            throw new Error(AuthErrorCode.INVALID_CREDENTIALS);
           }
 
           const isValid = await bcrypt.compare(credentials.password, user.password);
           if (!isValid) {
-            throw new Error("Email ou mot de passe incorrect");
+            throw new Error(AuthErrorCode.INVALID_CREDENTIALS);
           }
 
           if (user.status === 'PENDING') {
-            throw new Error("Votre compte est en attente de validation par l'administrateur.");
+            throw new Error(AuthErrorCode.ACCOUNT_PENDING);
           }
           if (user.status === 'REJECTED') {
-            throw new Error("Votre demande d'inscription a été refusée.");
+            throw new Error(AuthErrorCode.ACCOUNT_REJECTED);
           }
 
           return {
@@ -57,8 +58,14 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
           };
         } catch (error) {
+          if (
+            error instanceof Error &&
+            (Object.values(AuthErrorCode) as string[]).includes(error.message)
+          ) {
+            throw error
+          }
           console.error("Erreur d'authentification:", error);
-          throw error;
+          throw new Error(AuthErrorCode.INVALID_CREDENTIALS);
         }
       }
     })

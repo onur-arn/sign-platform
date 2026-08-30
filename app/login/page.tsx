@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/contexts/LanguageContext'
 import LanguageSelector from '@/components/LanguageSelector'
 import { DarkModeToggle } from '@/components/DarkModeToggle'
+import { translateAuthError } from '@/lib/authErrors'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -22,7 +23,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const result = await signIn('credentials', { email, password, redirect: false })
-      if (result?.error) setError(result.error)
+      if (result?.error) setError(translateAuthError(result.error, t.auth))
       else if (result?.ok) router.push('/dashboard')
     } catch {
       setError(t.auth.errorOccurred)
