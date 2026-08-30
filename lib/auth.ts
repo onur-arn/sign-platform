@@ -69,17 +69,32 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.role = (user as any).role;
+        token.roleCheckedAt = Date.now();
       }
-      // Si le role est absent (token ancien), le récupérer depuis la DB
-      if (!token.role && token.email) {
-        const dbUser = await prisma.user.findUnique({ where: { email: token.email as string } });
-        if (dbUser) token.role = dbUser.role;
+
+      // Resynchronise le rôle depuis la DB pour que grant/revoke prenne effet sans reconnecter
+      const checkedAt = typeof token.roleCheckedAt === 'number' ? token.roleCheckedAt : 0;
+      const shouldRefreshRole =
+        Boolean(token.email) &&
+        (trigger === 'update' || !token.role || Date.now() - checkedAt > 30_000);
+
+      if (shouldRefreshRole) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email as string },
+          select: { id: true, role: true },
+        });
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.role = dbUser.role;
+        }
+        token.roleCheckedAt = Date.now();
       }
+
       return token;
     },
     async session({ session, token }) {

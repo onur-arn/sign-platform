@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Ce compte ne peut pas être modifié' }, { status: 403 });
   }
 
-  // Empêche de se rétrograder soi-même
-  if (userId === currentUser.id) {
+  // Empêche de se modifier soi-même (rôle ou autre)
+  if (userId === currentUser.id || targetUser?.email === currentUser.email) {
     return NextResponse.json({ error: 'Vous ne pouvez pas modifier votre propre rôle' }, { status: 400 });
   }
 

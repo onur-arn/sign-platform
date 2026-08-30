@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { SIGN_LABELS_FR } from '@/lib/signLabels'
 import { displayParts } from '@/lib/userName'
@@ -25,12 +26,16 @@ function statusClass(status: string) {
 }
 
 export default function AdminPanelView() {
+  const { data: session } = useSession()
   const { t, language } = useLanguage()
   const [users, setUsers] = useState<UserRow[]>([])
   const [protectedEmail, setProtectedEmail] = useState<string | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+
+  const currentEmail = session?.user?.email?.toLowerCase() ?? null
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? null
 
   const locale =
     language === 'tr'
@@ -40,7 +45,6 @@ export default function AdminPanelView() {
         : language === 'pl'
           ? 'pl-PL'
           : 'fr-FR'
-
 
   const refresh = useCallback(async () => {
     try {
@@ -70,11 +74,30 @@ export default function AdminPanelView() {
 
   const act = async (path: string, body: object, userId: string) => {
     setLoadingId(userId)
-    await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    setError(null)
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (path.includes('/role')) {
+          setError(
+            res.status === 400
+              ? t.admin.cannotChangeOwnRole
+              : typeof data.error === 'string'
+                ? data.error
+                : t.admin.roleChangeFailed,
+          )
+        } else {
+          setError(typeof data.error === 'string' ? data.error : t.dashboard.networkError)
+        }
+      }
+    } catch {
+      setError(t.dashboard.networkError)
+    }
     setLoadingId(null)
     await refresh()
   }
@@ -210,7 +233,12 @@ export default function AdminPanelView() {
             <tbody>
               {users.map((u) => {
                 const { firstName, lastName } = person(u)
-                const isProtected = protectedEmail && u.email === protectedEmail
+                const isProtected = Boolean(protectedEmail && u.email === protectedEmail)
+                const isSelf =
+                  (currentUserId != null && u.id === currentUserId) ||
+                  (currentEmail != null && u.email.toLowerCase() === currentEmail)
+                const roleLocked = isProtected || isSelf
+
                 return (
                   <tr key={u.id}>
                     <td>{firstName || '—'}</td>
@@ -227,6 +255,8 @@ export default function AdminPanelView() {
                     <td>
                       {isProtected ? (
                         <span style={{ color: 'var(--text-sub)', fontSize: '0.8rem' }}>{t.admin.mainAccount}</span>
+                      ) : isSelf ? (
+                        <span style={{ color: 'var(--text-sub)', fontSize: '0.8rem' }}>{t.admin.ownAccount}</span>
                       ) : u.role === 'ADMIN' ? (
                         <button
                           type="button"
@@ -249,7 +279,7 @@ export default function AdminPanelView() {
                     </td>
                     <td>{new Date(u.createdAt).toLocaleDateString(locale)}</td>
                     <td>
-                      {!isProtected && (
+                      {!roleLocked && (
                         <button
                           type="button"
                           className="btn btn-ghost"

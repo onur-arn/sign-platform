@@ -22,6 +22,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Ce compte ne peut pas être supprimé' }, { status: 403 });
   }
 
+  if (target.id === currentUser.id || target.email === currentUser.email) {
+    return NextResponse.json({ error: 'Vous ne pouvez pas supprimer votre propre compte' }, { status: 400 });
+  }
+
   // Supprime les traductions liées avant de supprimer l'utilisateur
   await prisma.translation.deleteMany({ where: { userId } });
   await prisma.user.delete({ where: { id: userId } });
