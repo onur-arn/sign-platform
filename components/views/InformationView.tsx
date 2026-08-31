@@ -18,7 +18,7 @@ type Partner = {
 const carriers: Carrier[] = [
   {
     src: '/logo-project.jpg',
-    name: 'Hearken the Youth',
+    name: 'Station de Jeunesse',
   },
   {
     href: 'https://letsdoitturkey.com',
@@ -28,7 +28,7 @@ const carriers: Carrier[] = [
 ]
 
 const partners: Partner[] = [
-  { src: '/logo-project.jpg', alt: 'Hearken the Youth' },
+  { src: '/logo-project.jpg', alt: 'Station de Jeunesse' },
   { src: '/logo-letsdoitturkey.png', alt: "Let's Do It Turkey", href: 'https://letsdoitturkey.com' },
   { src: '/logo-youthstation.png', alt: 'Youth Station' },
   { src: '/logo-ulusal-ajans.png', alt: 'Türkiye Ulusal Ajansı', href: 'https://www.ua.gov.tr' },
