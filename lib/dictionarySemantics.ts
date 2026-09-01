@@ -66,6 +66,13 @@ const GEO_MULTI_COUNTRY_TAILS: string[][] = [
 const FR_RELATIONAL_BEFORE_COUNTRY = new Set(['de', 'du', 'des', 'd'])
 const FR_TITLE_BEFORE_COUNTRY = new Set(['roi', 'reine', 'prince', 'princesse', 'duc', 'duchesse', 'pape'])
 
+/** Expressions figées à garder groupées (plus est sinon un mot vide FR). */
+const FR_MERGED_PHRASES: [string, string][] = [
+  ['plus', 'tard'],
+  ['plus', 'tot'],
+  ['bien', 'sur'],
+]
+
 /** Suffixe de catégorie en sign_id (ex. kaki_fruit → « Kaki », koekelberg_ville → « Koekelberg »). */
 const FR_CATEGORY_SUFFIXES = new Set([
   'ville', 'fruit', 'planete', 'lieu', 'anatomie', 'religion', 'prenom', 'marque', 'magasin',
@@ -104,6 +111,22 @@ function decodeSignToken(token: string): string {
     .trim()
 }
 
+function mergeFixedPhraseTokens(raw: string[]): string[] {
+  const out: string[] = []
+  for (let i = 0; i < raw.length; i++) {
+    const t = raw[i]!
+    const n = normalizeToken(t)
+    const merged = FR_MERGED_PHRASES.find(([a, b]) => n === a && normalizeToken(raw[i + 1] ?? '') === b)
+    if (merged) {
+      out.push(`${t} ${raw[i + 1]}`)
+      i++
+      continue
+    }
+    out.push(t)
+  }
+  return out
+}
+
 function mergeSignIdTokens(raw: string[]): string[] {
   const out: string[] = []
   for (let i = 0; i < raw.length; i++) {
@@ -136,7 +159,7 @@ function mergeSignIdTokens(raw: string[]): string[] {
     if (t === 'rsquo') continue
     out.push(t)
   }
-  return out
+  return mergeFixedPhraseTokens(out)
 }
 
 export function splitSignId(signId: string): string[] {
@@ -225,7 +248,7 @@ function capitalizeWord(word: string): string {
 }
 
 function tokenizeLabel(label: string): string[] {
-  return label
+  const tokens = label
     .replace(/l'avance/gi, 'l avance')
     .replace(/l'air/gi, 'l air')
     .replace(/d'accord/gi, 'd accord')
@@ -234,12 +257,14 @@ function tokenizeLabel(label: string): string[] {
     .replace(/quelqu'un/gi, "quelqu'un")
     .split(/\s+/u)
     .filter(Boolean)
+  return mergeFixedPhraseTokens(tokens)
 }
 
 function labelContentWords(label: string, lang: Lang): string[] {
   const allowNumeric = /\d/.test(label)
   const words: string[] = []
   for (const token of tokenizeLabel(label)) {
+    if (/^\d+$/.test(token)) continue
     let w = token
     if (/^l'/i.test(w)) w = w.slice(2)
     if (/^d'/i.test(w)) w = w.slice(2)
@@ -575,6 +600,32 @@ function hasVerbalPhrase(content: string[]): boolean {
   return content.slice(1).some((t) => FR_VERB_LIKE.has(verbStem(t)))
 }
 
+/** Liste de synonymes sans virgule (ex. avenir futur plus tard prochain). */
+function isUnpunctuatedSynonymList(
+  signId: string,
+  signTokens: string[],
+  content: string[],
+  label: string,
+  lang: Lang,
+): boolean {
+  if (lang !== 'fr' || /[,;]/.test(label)) return false
+  if (content.length < 3 || content.length > 6) return false
+  if (hasVerbalPhrase(content)) return false
+  if (getHeadOnlyTailFromSignId(signId)) return false
+  if (isSynonymParaphraseSign(signId, content, label, lang)) return false
+  if (hasPhraseConnector(signId, signTokens, lang)) return false
+  const labelWords = labelContentWords(label, lang)
+  if (labelWords.length !== content.length) return false
+  for (let i = 0; i < content.length - 1; i++) {
+    const a = normalizeToken(content[i]!)
+    const b = normalizeToken(content[i + 1]!)
+    if (i > 0 && isFrenchAdjective(content[i]!) && !isFrenchAdjective(content[i + 1]!)) return false
+    if (i === 0 && FR_ADJECTIVE_HEADS.has(a)) return false
+    if (FR_SPECIFIER_NOUNS.has(b) && !FR_SPECIFIER_NOUNS.has(a)) return false
+  }
+  return true
+}
+
 /** Classifie la structure sémantique d'un signe. */
 export function classifySignStructure(signId: string, label: string, lang: Lang): SignStructure {
   const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
@@ -601,9 +652,10 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
     return 'synonym_list'
   }
 
-  // Expression nominale ≥ 3 mots — sauf paraphrase synonyme (surprise / evenement inattendu)
+  // Expression nominale ≥ 3 mots — sauf listes de synonymes ou paraphrases
   if (content.length >= 3 && !hasVerbalPhrase(content)) {
     if (isSynonymParaphraseSign(signId, content, trimmed, lang)) return 'qualified_noun'
+    if (isUnpunctuatedSynonymList(signId, signTokens, content, trimmed, lang)) return 'synonym_list'
     return 'phrase'
   }
 
