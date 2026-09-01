@@ -299,6 +299,32 @@ function signIdBaseParts(signId: string): string[] {
   return signId.replace(/_\d+$/, '').split('_').filter(Boolean)
 }
 
+/** sign_id avec deux tokens identiques (yo_yo, bla_bla) → un seul mot au dictionnaire. */
+function isReduplicatedCompound(signId: string): boolean {
+  const parts = signIdBaseParts(signId)
+  return parts.length === 2 && normalizeToken(parts[0]!) === normalizeToken(parts[1]!)
+}
+
+function reduplicatedDisplay(signId: string, label: string): string {
+  const parts = signIdBaseParts(signId)
+  const head = decodeSignToken(parts[0]!)
+  const labelParts = label.trim().split(/\s+/u)
+  if (
+    labelParts.length === 2 &&
+    normalizeToken(labelParts[0]!) === normalizeToken(labelParts[1]!)
+  ) {
+    // yo yo → Yoyo ; bla bla → Bla bla ; salarie salarie → Salarié
+    if (head.length <= 2) {
+      return capitalizeWord(head) + labelParts[1]!.toLowerCase()
+    }
+    if (head.length > 4) {
+      return capitalizeWord(head)
+    }
+    return formatPhraseDisplay(label.trim())
+  }
+  return formatPhraseDisplay(head + head)
+}
+
 /** « roi de Belgique », « Irlande du Nord » — pas une ville + pays. */
 function hasRelationalGeoMarker(parts: string[]): boolean {
   if (parts.some((p) => FR_TITLE_BEFORE_COUNTRY.has(normalizeToken(p)))) return true
@@ -511,6 +537,7 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   const trimmed = label.trim()
 
   if (isNumericExpression(signId, trimmed)) return 'phrase'
+  if (isReduplicatedCompound(signId)) return 'dedicated'
   if (content.length <= 1) return 'dedicated'
   if (hasVerbalPhrase(content)) return 'phrase'
 
@@ -586,6 +613,12 @@ function disambiguatedLabel(lemma: string, signId: string, label: string, lang: 
 export function extractDictionarySenses(signId: string, label: string, lang: Lang): DictionarySense[] {
   const trimmed = label.trim()
   if (!trimmed) return []
+
+  if (isReduplicatedCompound(signId)) {
+    const display = reduplicatedDisplay(signId, trimmed)
+    const lemma = normalizeToken(display)
+    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+  }
 
   const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
   const structure = classifySignStructure(signId, trimmed, lang)
