@@ -1,11 +1,6 @@
 /**
- * Préférences manuelles pour les doublons du dictionnaire.
- * Clé = mot normalisé (sans accents, minuscules).
- * Valeur = sign_id à conserver quand plusieurs signes partagent le même mot.
- *
- * Exemple :
- *   jeter: 'jeter_2',
- *   avis: 'avis_1',
+ * Préférences statiques (fallback). En production, les choix admin sont
+ * enregistrés en base et accessibles via Admin → Doublons dictionnaire.
  */
 export const DICTIONARY_PREFERRED_SIGN: Record<
   'fr' | 'en' | 'tr' | 'pl',

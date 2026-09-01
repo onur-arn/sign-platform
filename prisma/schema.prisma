@@ -49,6 +49,19 @@ model SynonymCache {
   createdAt DateTime @default(now())
 }
 
+model DictionaryPreference {
+  id         String   @id @default(cuid())
+  lang       String   // fr | en | tr | pl
+  normalized String   // mot normalisé (sans accents)
+  signId     String
+  updatedBy  String?
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@unique([lang, normalized])
+  @@index([lang])
+}
+
 model RateLimitBucket {
   key     String   @id
   count   Int      @default(0)

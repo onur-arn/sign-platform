@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { SIGN_LABELS_FR, SIGN_LABELS_EN, SIGN_LABELS_TR, SIGN_LABELS_PL } from '@/lib/signLabels'
@@ -37,8 +37,29 @@ export default function DictionnaireView() {
   const [activeLetter, setActiveLetter] = useState('A')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<{ id: string; label: string; ts: number } | null>(null)
+  const [preferences, setPreferences] = useState<Record<string, string>>({})
+  const [prefsReady, setPrefsReady] = useState(false)
 
   const dictionaryLang = language === 'en' ? 'en' : language === 'pl' ? 'pl' : language === 'tr' ? 'tr' : 'fr'
+
+  useEffect(() => {
+    let cancelled = false
+    setPrefsReady(false)
+    fetch(`/api/dictionary/preferences?lang=${dictionaryLang}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { preferences: {} }))
+      .then((data) => {
+        if (!cancelled) {
+          setPreferences(data.preferences ?? {})
+          setPrefsReady(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPrefsReady(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [dictionaryLang])
 
   const labelsMap = useMemo(() => {
     if (language === 'en') return SIGN_LABELS_EN
@@ -48,8 +69,8 @@ export default function DictionnaireView() {
   }, [language])
 
   const allSigns = useMemo(
-    () => buildDictionaryEntries(labelsMap, dictionaryLang),
-    [labelsMap, dictionaryLang],
+    () => (prefsReady ? buildDictionaryEntries(labelsMap, dictionaryLang, preferences) : []),
+    [labelsMap, dictionaryLang, preferences, prefsReady],
   )
 
   const displayed = useMemo(() => {

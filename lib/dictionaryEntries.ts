@@ -261,9 +261,9 @@ function scoreSignForWord(signId: string, normalized: string, tokenIndex: number
 function pickBestEntry(
   normalized: string,
   candidates: DictionaryEntry[],
-  lang: Lang,
+  preferences: Record<string, string>,
 ): DictionaryEntry {
-  const preferredId = DICTIONARY_PREFERRED_SIGN[lang][normalized]
+  const preferredId = preferences[normalized]
   if (preferredId) {
     const forced = candidates.find((c) => c.signId === preferredId)
     if (forced) return forced
@@ -276,13 +276,46 @@ function pickBestEntry(
   })
 }
 
+/** Choisit le sign_id retenu pour un mot en doublon. */
+export function resolvePreferredSignId(
+  normalized: string,
+  candidateSignIds: string[],
+  labelsMap: Record<string, string>,
+  lang: Lang,
+  preferences: Record<string, string>,
+): { signId: string; isManual: boolean } {
+  const fromUser = preferences[normalized]
+  if (fromUser && candidateSignIds.includes(fromUser)) {
+    return { signId: fromUser, isManual: true }
+  }
+
+  const fromStatic = DICTIONARY_PREFERRED_SIGN[lang][normalized]
+  if (fromStatic && candidateSignIds.includes(fromStatic)) {
+    return { signId: fromStatic, isManual: true }
+  }
+
+  const candidates: DictionaryEntry[] = candidateSignIds.map((signId) => ({
+    signId,
+    word: labelsMap[signId] ?? signId,
+    normalized,
+  }))
+
+  const merged = { ...DICTIONARY_PREFERRED_SIGN[lang], ...preferences }
+  return {
+    signId: pickBestEntry(normalized, candidates, merged).signId,
+    isManual: false,
+  }
+}
+
 /**
  * Construit les entrées du dictionnaire : un mot unique par ligne, lié au signe correspondant.
  */
 export function buildDictionaryEntries(
   labelsMap: Record<string, string>,
   lang: Lang = 'fr',
+  preferences: Record<string, string> = {},
 ): DictionaryEntry[] {
+  const mergedPreferences = { ...DICTIONARY_PREFERRED_SIGN[lang], ...preferences }
   const buckets = new Map<string, DictionaryEntry[]>()
 
   for (const [signId, label] of Object.entries(labelsMap)) {
@@ -297,7 +330,7 @@ export function buildDictionaryEntries(
 
   const entries: DictionaryEntry[] = []
   for (const [normalized, candidates] of buckets) {
-    entries.push(pickBestEntry(normalized, candidates, lang))
+    entries.push(pickBestEntry(normalized, candidates, mergedPreferences))
   }
 
   return entries.sort((a, b) =>
