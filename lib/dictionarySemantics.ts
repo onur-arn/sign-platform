@@ -74,6 +74,9 @@ const FR_MERGED_PHRASES: [string, string][] = [
   ['bien', 'sur'],
   ['rendez', 'vous'],
   ['jamais', 'vu'],
+  ['croque', 'monsieur'],
+  ['croque', 'madame'],
+  ['mini', 'foot'],
 ]
 
 /** Particules dans les noms propres (van Damme, de Gaulle…). */
@@ -116,6 +119,36 @@ function isNameLikeToken(token: string): boolean {
   return true
 }
 
+/** Acronyme court après le mot complet (ex. ultraviolet / uv). */
+function isAbbreviationSynonymPair(parts: string[]): boolean {
+  if (parts.length !== 2) return false
+  const [a, b] = parts.map(normalizeToken)
+  if (b.length < 2 || b.length > 4) return false
+  if (a.length <= b.length) return false
+  if (!/^[a-z]+$/.test(b)) return false
+  if (FR_COMMON_VOCABULARY.has(b)) return false
+  return true
+}
+
+/** Infinitif français (ex. echouer, gronder, rater). */
+function isFrenchInfinitive(token: string): boolean {
+  const n = normalizeToken(token)
+  if (n.length < 5) return false
+  if (FR_NAME_PARTICLES.has(n)) return false
+  return /(?:er|ir|oir|re)$/.test(n)
+}
+
+/** Nom + infinitif = synonymes liés (ex. échec / échouer), pas un nom propre ni une phrase. */
+function isNounInfinitiveSynonymPair(first: string, second: string, lang: Lang): boolean {
+  if (lang !== 'fr' || !isFrenchInfinitive(second)) return false
+  const a = normalizeToken(first)
+  if (FR_NAME_PARTICLES.has(a) || isStopWord(a, lang)) return false
+  if (FR_ADJECTIVE_HEADS.has(a)) return false
+  if (FR_SPECIFIER_NOUNS.has(normalizeToken(second))) return false
+  if (new Set(['comment', 'pourquoi', 'quand', 'combien', 'que', 'quoi']).has(a)) return false
+  return true
+}
+
 function isProperNameSign(
   signId: string,
   signTokens: string[],
@@ -140,6 +173,8 @@ function isProperNameSign(
   }
 
   if (isUnpunctuatedSynonymList(signId, signTokens, content, label, lang)) return false
+  if (isAbbreviationSynonymPair(parts)) return false
+  if (parts.length === 2 && isNounInfinitiveSynonymPair(parts[0]!, parts[1]!, lang)) return false
 
   if (parts.length >= 2 && parts.length <= 4) {
     return parts.every(isNameLikeToken)
@@ -227,6 +262,15 @@ function mergeMultiWordPhrases(tokens: string[]): string[] {
       i += 2
       continue
     }
+    if (
+      n0 === 'a' &&
+      normalizeToken(merged[i + 1] ?? '') === 'partir' &&
+      normalizeToken(merged[i + 2] ?? '') === 'de'
+    ) {
+      out.push([merged[i], merged[i + 1], merged[i + 2]].join(' '))
+      i += 2
+      continue
+    }
     out.push(merged[i]!)
   }
   return out
@@ -243,6 +287,11 @@ function mergeSignIdTokens(raw: string[]): string[] {
     }
     if (t === 'd' && raw[i + 1] === 'accord') {
       out.push("d'accord")
+      i++
+      continue
+    }
+    if (t === 'd' && raw[i + 1] === 'avis') {
+      out.push("d'avis")
       i++
       continue
     }
@@ -293,6 +342,22 @@ function isSignVariantDigit(token: string, signId: string): boolean {
   return parts[0] !== token
 }
 
+/**
+ * Chiffre isolé 2–9 = nombre de synonymes (ex. excellent_magnifique_3_parfait → 3 mots).
+ * Le chiffre compte les tokens réels, pas lui-même.
+ */
+function getSynonymCountMarker(signId: string): number | null {
+  const parts = signIdBaseParts(signId)
+  for (let i = 1; i < parts.length - 1; i++) {
+    const p = parts[i]!
+    if (!/^[2-9]$/.test(p)) continue
+    const count = parseInt(p, 10)
+    const words = parts.filter((x, j) => j !== i && !/^[1-9]$/.test(x))
+    if (words.length === count) return count
+  }
+  return null
+}
+
 function isDictionaryNoiseDigit(word: string, signId: string): boolean {
   const w = word.trim()
   if (!/^[1-9]$/.test(w)) return false
@@ -341,6 +406,8 @@ function capitalizeWord(word: string): string {
   if (lower === 'rendez vous' || lower === 'rendez-vous') return 'Rendez-vous'
   if (lower === "s'il vous plait" || lower === "s'il vous plaît") return "S'il vous plaît"
   if (lower === 'svp') return 'SVP'
+  if (lower === 'uv') return 'UV'
+  if (lower === 'a partir de') return 'À partir de'
   if (lower === "qu'y a-t-il") return "Qu'y a-t-il"
   if (lower === "que se passe-t-il") return "Que se passe-t-il"
   if (lower === "d'accord") return "D'accord"
@@ -359,6 +426,8 @@ function capitalizeWord(word: string): string {
 
 function tokenizeLabel(label: string): string[] {
   const tokens = label
+    .replace(/[,;]/g, ' ')
+    .replace(/à\s+partir\s+de/gi, 'a partir de')
     .replace(/l'avance/gi, 'l avance')
     .replace(/l'air/gi, 'l air')
     .replace(/d'accord/gi, 'd accord')
@@ -422,7 +491,7 @@ function lemmaFromDisplay(display: string, lang: Lang): string {
 }
 
 /** Noms courants finissant en -ois/-ais confondus avec des adjectifs (ex. mois ≠ moisissure). */
-const FR_NOUN_NOT_ADJECTIVE = new Set(['mois', 'fois', 'pays', 'bois', 'poids', 'repas'])
+const FR_NOUN_NOT_ADJECTIVE = new Set(['mois', 'fois', 'pays', 'bois', 'poids', 'repas', 'coque'])
 
 function isFrenchAdjective(token: string): boolean {
   const n = normalizeToken(token)
@@ -954,6 +1023,23 @@ function extractCommaSynonymListSenses(signId: string, label: string, lang: Lang
   for (const segment of label.split(/[,;]/).map((s) => s.trim()).filter(Boolean)) {
     const cleaned = segment.replace(/\s+\d+(?=\s|$)/g, ' ').trim()
     if (!cleaned) continue
+
+    const segmentWords = labelContentWords(cleaned, lang)
+    if (segmentWords.length === 2 && isNounInfinitiveSynonymPair(segmentWords[0]!, segmentWords[1]!, lang)) {
+      for (const raw of segmentWords) {
+        const lemma = normalizeToken(raw)
+        if (seen.has(lemma)) continue
+        seen.add(lemma)
+        out.push({
+          word: capitalizeWord(raw),
+          lemma,
+          senseKey: `${lemma}@${signId}`,
+          signId,
+        })
+      }
+      continue
+    }
+
     const display = formatPhraseDisplay(cleaned)
     const lemma = lemmaFromCommaSegment(display, lang)
     if (!lemma || seen.has(lemma)) continue
@@ -968,6 +1054,221 @@ function extractCommaSynonymListSenses(signId: string, label: string, lang: Lang
   }
 
   return out
+}
+
+/**
+ * Synonyme court + expression « X de Y » (ex. seisme / tremblement de terre).
+ * Mot unique en tête, puis nom + de + nom (4 parties dans le sign_id).
+ */
+function getSynonymDePhraseSplit(signId: string, lang: Lang): { head: string; tailParts: string[] } | null {
+  if (lang !== 'fr') return null
+  if (isApartirDeSynonymSign(signId, lang)) return null
+  const parts = signIdBaseParts(signId)
+  const deIdx = parts.findIndex((p) => normalizeToken(p) === 'de')
+  if (deIdx < 1 || deIdx !== parts.length - 2) return null
+
+  const headParts = parts.slice(0, deIdx - 1)
+  const tailParts = parts.slice(deIdx - 1)
+  if (headParts.length !== 1 || tailParts.length < 3) return null
+
+  const headNorm = normalizeToken(headParts[0]!)
+  if (FR_NAME_PARTICLES.has(headNorm)) return null
+  if (FR_TITLE_BEFORE_COUNTRY.has(normalizeToken(tailParts[0]!))) return null
+  if (FR_COUNTRIES.has(normalizeToken(parts[parts.length - 1]!))) return null
+  if (normalizeToken(tailParts[0]!) === 'type') return null
+
+  return { head: headParts[0]!, tailParts }
+}
+
+function extractSynonymDePhraseSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  const split = getSynonymDePhraseSplit(signId, lang)
+  if (!split) return null
+
+  const trimmed = label.trim()
+  const labelWords = labelContentWords(trimmed, lang)
+  const headLemma = normalizeToken(split.head)
+  const headDisplay = capitalizeWord(labelWords[0] ?? decodeSignToken(split.head))
+  const tailRaw = tailPhraseFromLabel(trimmed, split.tailParts)
+  const tailDisplay = qualifiedPhraseDisplay(tailRaw, lang)
+  const tailLemma = normalizeToken(labelWords[1] ?? split.tailParts[0] ?? '')
+  const tailKey = normalizeToken(tailRaw)
+  if (!tailLemma || !tailKey) return null
+
+  return [
+    { word: headDisplay, lemma: headLemma, senseKey: `${headLemma}@${signId}`, signId },
+    { word: tailDisplay, lemma: tailLemma, senseKey: tailKey, signId },
+  ]
+}
+
+/** Préposition / clitic qui reste attaché au verbe précédent (ex. ne pas, d'avis, se désister). */
+const FR_VERB_PHRASE_ATTACH = new Set([
+  'd', 'de', 'du', 'des', 'sa', 'son', 'ses', 'se', 's', 'pas', 'ne', 'la', 'le', 'les', 'l', 'a', 'au', 'aux',
+])
+
+function isMultiVerbalPhraseStart(part: string, prevPart: string | null): boolean {
+  const n = normalizeToken(part)
+  if (n === 'se') return true
+  if (!isFrenchInfinitive(part) && !FR_VERB_LIKE.has(n)) return false
+  if (!prevPart) return false
+  return !FR_VERB_PHRASE_ATTACH.has(normalizeToken(prevPart))
+}
+
+/** Découpe en expressions verbales (ex. changer d'avis · retourner sa veste · se desister). */
+function getMultiVerbalPhraseSegments(signId: string, lang: Lang): string[][] | null {
+  if (lang !== 'fr') return null
+  if (isApartirDeSynonymSign(signId, lang)) return null
+  const parts = signIdBaseParts(signId)
+  if (parts.length < 4) return null
+
+  const segments: string[][] = []
+  let current: string[] = []
+
+  for (const part of parts) {
+    if (current.length === 0) {
+      current.push(part)
+      continue
+    }
+    if (isMultiVerbalPhraseStart(part, current[current.length - 1]!)) {
+      segments.push(current)
+      current = [part]
+    } else {
+      current.push(part)
+    }
+  }
+  if (current.length) segments.push(current)
+  if (segments.length < 2 || segments.length > 5) return null
+
+  for (const seg of segments) {
+    const first = normalizeToken(seg[0]!)
+    if (first !== 'se' && !isFrenchInfinitive(seg[0]!) && !FR_VERB_LIKE.has(first)) return null
+  }
+
+  return segments
+}
+
+function matchSegmentToken(labelPart: string, segmentPart: string): boolean {
+  return normalizeToken(stripTokenPunctuation(labelPart)) === normalizeToken(segmentPart)
+}
+
+function extractLeadingSegmentPhrase(label: string, segmentParts: string[]): string | null {
+  const rawParts = label.trim().split(/\s+/u)
+  let segIdx = 0
+  let endIdx = 0
+
+  for (let i = 0; i < rawParts.length && segIdx < segmentParts.length; i++) {
+    const segPart = segmentParts[segIdx]!
+    const labelPart = rawParts[i]!
+
+    if (
+      normalizeToken(segPart) === 'd' &&
+      segIdx + 1 < segmentParts.length &&
+      normalizeToken(segmentParts[segIdx + 1]!) === 'avis' &&
+      /^d['']?avis$/i.test(stripTokenPunctuation(labelPart))
+    ) {
+      segIdx += 2
+      endIdx = i + 1
+      continue
+    }
+
+    if (matchSegmentToken(labelPart, segPart)) {
+      segIdx++
+      endIdx = i + 1
+      continue
+    }
+
+    return null
+  }
+
+  if (segIdx !== segmentParts.length) return null
+  return rawParts.slice(0, endIdx).join(' ')
+}
+
+function verbalPhraseDisplay(raw: string): string {
+  const trimmed = raw.trim().replace(/\bd avis\b/gi, "d'avis")
+  if (!trimmed) return trimmed
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
+
+function segmentFallbackPhrase(segmentParts: string[]): string {
+  const out: string[] = []
+  for (let i = 0; i < segmentParts.length; i++) {
+    const t = segmentParts[i]!
+    if (normalizeToken(t) === 'd' && normalizeToken(segmentParts[i + 1] ?? '') === 'avis') {
+      out.push("d'avis")
+      i++
+      continue
+    }
+    out.push(decodeSignToken(t))
+  }
+  return out.join(' ')
+}
+
+/** ex. a_partir_de_maintenant → « À partir de » · « Maintenant ». */
+function isApartirDeSynonymSign(signId: string, lang: Lang): boolean {
+  if (lang !== 'fr') return false
+  const base = signId.replace(/_\d+$/, '')
+  if (!/^a_partir_de_/i.test(base)) return false
+  return signIdBaseParts(signId).length >= 4
+}
+
+function extractApartirDeSynonymSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (!isApartirDeSynonymSign(signId, lang)) return null
+  const tailParts = signIdBaseParts(signId).slice(3)
+  if (tailParts.length === 0) return null
+
+  const normalizedLabel = label.replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim()
+  let remaining = normalizedLabel.replace(/^à?\s*partir\s+de\s+/i, '').trim()
+
+  const senses: DictionarySense[] = [
+    {
+      word: 'À partir de',
+      lemma: 'a partir de',
+      senseKey: `a partir de@${signId}`,
+      signId,
+    },
+  ]
+
+  for (const part of tailParts) {
+    const partNorm = normalizeToken(part)
+    const labelWords = remaining.split(/\s+/u).map(stripTokenPunctuation).filter(Boolean)
+    const matchIdx = labelWords.findIndex((w) => normalizeToken(w) === partNorm)
+    const raw = matchIdx >= 0 ? labelWords[matchIdx]! : decodeSignToken(part)
+    if (matchIdx >= 0) {
+      remaining = labelWords.slice(matchIdx + 1).join(' ')
+    }
+    const cleaned = cleanWord(raw, { allowNumeric: true }) ?? raw
+    senses.push({
+      word: capitalizeWord(cleaned),
+      lemma: partNorm,
+      senseKey: `${partNorm}@${signId}`,
+      signId,
+    })
+  }
+
+  return senses
+}
+
+function extractMultiVerbalPhraseSynonymSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  const segments = getMultiVerbalPhraseSegments(signId, lang)
+  if (!segments) return null
+
+  const senses: DictionarySense[] = []
+  const seen = new Set<string>()
+  let remaining = label.trim().replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+  for (const segmentParts of segments) {
+    const raw =
+      extractLeadingSegmentPhrase(remaining, segmentParts) ?? segmentFallbackPhrase(segmentParts)
+    remaining = remaining.slice(raw.length).trim()
+    const display = verbalPhraseDisplay(raw)
+    const lemma = lemmaFromDisplay(display, lang)
+    const key = normalizeToken(display)
+    if (!lemma || seen.has(key)) continue
+    seen.add(key)
+    senses.push({ word: display, lemma, senseKey: `${key}@${signId}`, signId })
+  }
+
+  return senses.length >= 2 ? senses : null
 }
 
 /** ex. repugnant_degoutant_incapable_de_toucher → 3 synonymes dont « incapable de toucher ». */
@@ -1049,6 +1350,8 @@ function isUnpunctuatedSynonymList(
   lang: Lang,
 ): boolean {
   if (lang !== 'fr' || /[,;]/.test(label)) return false
+  const countMarker = getSynonymCountMarker(signId)
+  if (countMarker !== null) return content.length === countMarker
   if (content.length < 3 || content.length > 6) return false
   if (hasVerbalPhrase(content)) return false
   if (getHeadOnlyTailFromSignId(signId)) return false
@@ -1061,7 +1364,7 @@ function isUnpunctuatedSynonymList(
     const b = normalizeToken(content[i + 1]!)
     if (i > 0 && isFrenchAdjective(content[i]!) && !isFrenchAdjective(content[i + 1]!)) return false
     if (i === 0 && FR_ADJECTIVE_HEADS.has(a)) return false
-    if (FR_SPECIFIER_NOUNS.has(b) && !FR_SPECIFIER_NOUNS.has(a)) return false
+    if (content.length === 2 && FR_SPECIFIER_NOUNS.has(b) && !FR_SPECIFIER_NOUNS.has(a)) return false
   }
   return true
 }
@@ -1078,6 +1381,8 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   if (isPrepositionalVerbList(signId, content, lang)) return 'synonym_list'
   if (isProperNameSign(signId, signTokens, content, trimmed, lang)) return 'phrase'
   if (getSynonymVerbalPhraseTail(signId)) return 'synonym_list'
+  if (isApartirDeSynonymSign(signId, lang)) return 'synonym_list'
+  if (getMultiVerbalPhraseSegments(signId, lang)) return 'synonym_list'
   if (hasVerbalPhrase(content)) return 'phrase'
 
   // Lieu + pays ou suffixe catégorie (ville, fruit…) — via sign_id
@@ -1087,6 +1392,8 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
     if (isCompoundPhraseWithTrailingCommaTag(signId, signTokens, trimmed, lang)) return 'phrase'
     return 'synonym_list'
   }
+
+  if (getSynonymDePhraseSplit(signId, lang)) return 'synonym_list'
 
   if (hasPhraseConnector(signId, signTokens, lang)) return 'phrase'
 
@@ -1174,6 +1481,15 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   if (isSynonymParaphraseSign(signId, contentEarly, trimmed, lang)) {
     return extractSynonymParaphraseSenses(signId, trimmed, lang)
   }
+
+  const apartirDeSenses = extractApartirDeSynonymSenses(signId, trimmed, lang)
+  if (apartirDeSenses) return filterDictionarySenses(apartirDeSenses, signId)
+
+  const dePhraseSenses = extractSynonymDePhraseSenses(signId, trimmed, lang)
+  if (dePhraseSenses) return filterDictionarySenses(dePhraseSenses, signId)
+
+  const multiVerbalSenses = extractMultiVerbalPhraseSynonymSenses(signId, trimmed, lang)
+  if (multiVerbalSenses) return filterDictionarySenses(multiVerbalSenses, signId)
 
   const commaQuestions = extractCommaQuestionPhrases(signId, trimmed, lang)
   if (commaQuestions) return filterDictionarySenses(commaQuestions, signId)
