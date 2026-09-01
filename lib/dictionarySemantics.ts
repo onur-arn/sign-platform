@@ -290,7 +290,52 @@ function isFrenchAdjective(token: string): boolean {
   const n = normalizeToken(token)
   if (n.length < 4) return false
   if (FR_NOUN_NOT_ADJECTIVE.has(n) || FR_COUNTRIES.has(n)) return false
-  return /(aire|ique|eux|euse|if|ive|ien|ienne|ois|oise|ais|elle|able|ible|al|ale|uel|uelle)$/.test(n)
+  return /(aire|ique|eux|euse|if|ive|ien|ienne|ois|oise|ais|elle|able|ible|al|ale|uel|uelle|du|ue)$/.test(n)
+}
+
+function isDedicatedMonoSign(head: string, lang: Lang): boolean {
+  const signId = normalizeToken(head)
+  if (signIdBaseParts(signId).length !== 1) return false
+  const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  const content = contentTokens(signTokens, lang, signId)
+  return content.length === 1 && normalizeToken(content[0]!) === signId
+}
+
+/** ex. surprise_evenement_inattendu → « Surprise » + « Evenement inattendu » (pas une seule phrase). */
+function isSynonymParaphraseSign(signId: string, content: string[], label: string, lang: Lang): boolean {
+  if (lang !== 'fr') return false
+  if (content.length !== 3) return false
+  if (getHeadOnlyTailFromSignId(signId)) return false
+  if (/[,;]/.test(label)) return false
+  const parts = signIdBaseParts(signId)
+  const head = normalizeToken(parts[0]!)
+  if (FR_ADJECTIVE_HEADS.has(head) || isFrenchAdjective(head)) return false
+  const tail = normalizeToken(parts[2]!)
+  const mid = normalizeToken(parts[1]!)
+  if (!isFrenchAdjective(tail) || isFrenchAdjective(mid)) return false
+  const labelWords = labelContentWords(label, lang)
+  if (labelWords.length < 3 || normalizeToken(labelWords[0]!) !== head) return false
+  return true
+}
+
+function extractSynonymParaphraseSenses(signId: string, label: string, lang: Lang): DictionarySense[] {
+  const trimmed = label.trim()
+  const labelWords = labelContentWords(trimmed, lang)
+  const parts = signIdBaseParts(signId)
+  const headLemma = normalizeToken(parts[0]!)
+  const rawTailParts = trimmed.split(/\s+/u).slice(1)
+  const tailDisplay = qualifiedPhraseDisplay(rawTailParts.join(' '), lang)
+  const tailLemma = normalizeToken(labelWords[1] ?? parts[1] ?? '')
+  const tailKey = normalizeToken(rawTailParts.join(' '))
+  if (!tailLemma || !tailKey) return []
+
+  const senses: DictionarySense[] = []
+  if (!isDedicatedMonoSign(parts[0]!, lang)) {
+    const head = capitalizeWord(labelWords[0] ?? decodeSignToken(parts[0]!))
+    senses.push({ word: head, lemma: headLemma, senseKey: `${headLemma}@${signId}`, signId })
+  }
+  senses.push({ word: tailDisplay, lemma: tailLemma, senseKey: tailKey, signId })
+  return senses
 }
 
 type GeoCountryTail = { tokens: string[]; length: number }
@@ -556,8 +601,11 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
     return 'synonym_list'
   }
 
-  // Expression nominale ≥ 3 mots (ex. accident vasculaire cérébral) — pas une liste de synonymes
-  if (content.length >= 3 && !hasVerbalPhrase(content)) return 'phrase'
+  // Expression nominale ≥ 3 mots — sauf paraphrase synonyme (surprise / evenement inattendu)
+  if (content.length >= 3 && !hasVerbalPhrase(content)) {
+    if (isSynonymParaphraseSign(signId, content, trimmed, lang)) return 'qualified_noun'
+    return 'phrase'
+  }
 
   return 'synonym_list'
 }
@@ -620,6 +668,12 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
 
+  const signTokensEarly = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  const contentEarly = contentTokens(signTokensEarly, lang, signId)
+  if (isSynonymParaphraseSign(signId, contentEarly, trimmed, lang)) {
+    return extractSynonymParaphraseSenses(signId, trimmed, lang)
+  }
+
   const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
   const structure = classifySignStructure(signId, trimmed, lang)
   const content = contentTokens(signTokens, lang, signId)
@@ -645,6 +699,9 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     if (content.length >= 2) {
       const kind = getQualifiedNounKind(content[0]!, content[1]!, signId, lang)
       if (kind) return filterDictionarySenses(extractQualifiedNounSenses(signId, trimmed, content, kind, lang), signId)
+      if (isSynonymParaphraseSign(signId, content, trimmed, lang)) {
+        return filterDictionarySenses(extractSynonymParaphraseSenses(signId, trimmed, lang), signId)
+      }
     }
     return []
   }
