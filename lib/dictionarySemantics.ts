@@ -1,6 +1,6 @@
 export type Lang = 'fr' | 'en' | 'tr' | 'pl'
 
-export type SignStructure = 'dedicated' | 'phrase' | 'synonym_list'
+export type SignStructure = 'dedicated' | 'phrase' | 'synonym_list' | 'qualified_noun'
 
 export type DictionarySense = {
   /** Libellé affiché dans le dictionnaire */
@@ -37,6 +37,34 @@ const FR_SPECIFIER_NOUNS = new Set([
   'homme', 'femme', 'enfant', 'bebe', 'chien', 'chat', 'cheval', 'vache', 'anniversaire',
   'noel', 'paques', 'travail', 'guerre', 'paix', 'amour', 'mort', 'vie', 'sante', 'maladie',
 ])
+
+/** Pays — modificateur géographique en fin de sign_id (ville + pays → entrée ville seulement). */
+const FR_COUNTRIES = new Set([
+  'allemagne', 'france', 'belgique', 'suisse', 'italie', 'espagne', 'turquie', 'pologne',
+  'autriche', 'portugal', 'angleterre', 'luxembourg', 'hollande',
+  'grece', 'norvege', 'suede', 'danemark', 'finlande', 'irlande', 'ecosse', 'maroc', 'algerie',
+  'tunisie', 'canada', 'mexique', 'bresil', 'argentine', 'chine', 'japon', 'inde', 'russie',
+  'usa', 'uk', 'indonesie', 'slovaquie', 'venezuela', 'moldavie', 'australie', 'tchequie', 'iran',
+  'palestine', 'lettonie',
+])
+
+/** Suffixes pays multi-mots en fin de sign_id (du plus long au plus court). */
+const GEO_MULTI_COUNTRY_TAILS: string[][] = [
+  ['emirats', 'arabes', 'unis'],
+  ['bosnie', 'herzegovine'],
+  ['arabie', 'saoudite'],
+  ['royaume', 'uni'],
+  ['pays', 'bas'],
+  ['sri', 'lanka'],
+  ['costa', 'rica'],
+  ['porto', 'rico'],
+  ['viet', 'nam'],
+  ['burkina', 'faso'],
+  ['birmanie', 'myanmar'],
+]
+
+const FR_RELATIONAL_BEFORE_COUNTRY = new Set(['de', 'du', 'des', 'd'])
+const FR_TITLE_BEFORE_COUNTRY = new Set(['roi', 'reine', 'prince', 'princesse', 'duc', 'duchesse', 'pape'])
 
 const STOP_WORDS: Record<Lang, Set<string>> = {
   fr: new Set([
@@ -113,8 +141,49 @@ function isStopWord(token: string, lang: Lang): boolean {
   return STOP_WORDS[lang].has(normalizeToken(token))
 }
 
-function contentTokens(signTokens: string[], lang: Lang): string[] {
-  return signTokens.filter((t) => !isStopWord(t, lang))
+function contentTokens(signTokens: string[], lang: Lang, signId?: string): string[] {
+  return signTokens.filter((t) => {
+    if (isStopWord(t, lang)) return false
+    if (signId && isSignVariantDigit(t, signId)) return false
+    return true
+  })
+}
+
+/** Suffixe numérique de variante en fin de sign_id (ex. cologne_allemagne_1 → pas un mot du dictionnaire). */
+const MAX_VARIANT_SUFFIX = 6
+
+/** Chiffre 1–9 au milieu d'un sign_id (ex. choisir_2_elire) — pas une entrée dictionnaire. */
+function isSignVariantDigit(token: string, signId: string): boolean {
+  if (!/^[1-9]$/.test(token)) return false
+  const parts = signIdBaseParts(signId)
+  return parts[0] !== token
+}
+
+function isDictionaryNoiseDigit(word: string, signId: string): boolean {
+  const w = word.trim()
+  if (!/^[1-9]$/.test(w)) return false
+  return isSignVariantDigit(w, signId)
+}
+
+function filterDictionarySenses(senses: DictionarySense[], signId: string): DictionarySense[] {
+  return senses.filter((s) => !isDictionaryNoiseDigit(s.word, signId))
+}
+
+function stripTrailingVariantSuffix(tokens: string[], signId: string): string[] {
+  if (tokens.length === 0) return tokens
+  const match = signId.match(/_(\d+)$/)
+  if (!match) return tokens
+  const suffix = match[1]!
+  const n = parseInt(suffix, 10)
+  if (Number.isNaN(n) || n > MAX_VARIANT_SUFFIX) return tokens
+  const last = tokens[tokens.length - 1]
+  if (last === suffix) return tokens.slice(0, -1)
+  return tokens
+}
+
+function contentTokensFromSignId(signId: string, lang: Lang): string[] {
+  const tokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  return contentTokens(tokens, lang, signId)
 }
 
 function cleanWord(raw: string, opts?: { allowNumeric?: boolean }): string | null {
@@ -208,6 +277,153 @@ function lemmaFromDisplay(display: string, lang: Lang): string {
   return normalizeToken(display)
 }
 
+/** Noms courants finissant en -ois/-ais confondus avec des adjectifs (ex. mois ≠ moisissure). */
+const FR_NOUN_NOT_ADJECTIVE = new Set(['mois', 'fois', 'pays', 'bois', 'poids', 'repas'])
+
+function isFrenchAdjective(token: string): boolean {
+  const n = normalizeToken(token)
+  if (n.length < 4) return false
+  if (FR_NOUN_NOT_ADJECTIVE.has(n) || FR_COUNTRIES.has(n)) return false
+  return /(aire|ique|eux|euse|if|ive|ien|ienne|ois|oise|ais|elle|able|ible|al|ale|uel|uelle)$/.test(n)
+}
+
+type GeoCountryTail = { tokens: string[]; length: number }
+
+function signIdBaseParts(signId: string): string[] {
+  return signId.replace(/_\d+$/, '').split('_').filter(Boolean)
+}
+
+/** « roi de Belgique », « Irlande du Nord » — pas une ville + pays. */
+function hasRelationalGeoMarker(parts: string[]): boolean {
+  if (parts.some((p) => FR_TITLE_BEFORE_COUNTRY.has(normalizeToken(p)))) return true
+  if (
+    parts.length >= 3 &&
+    normalizeToken(parts[parts.length - 2]!) === 'pays' &&
+    normalizeToken(parts[parts.length - 1]!) === 'bas'
+  ) {
+    return false
+  }
+  const last = normalizeToken(parts[parts.length - 1] ?? '')
+  if (!FR_COUNTRIES.has(last)) return false
+  const before = normalizeToken(parts[parts.length - 2] ?? '')
+  return FR_RELATIONAL_BEFORE_COUNTRY.has(before)
+}
+
+/** Détecte ville/lieu + pays via le sign_id (fiable pour toutes les langues d'affichage). */
+function getGeoCountryTailFromSignId(signId: string): GeoCountryTail | null {
+  const parts = signIdBaseParts(signId)
+  if (parts.length < 2 || hasRelationalGeoMarker(parts)) return null
+
+  for (const tailTokens of GEO_MULTI_COUNTRY_TAILS) {
+    if (parts.length <= tailTokens.length) continue
+    const slice = parts.slice(-tailTokens.length).map(normalizeToken)
+    if (!slice.every((t, i) => t === tailTokens[i]!)) continue
+    // ex. emirats_arabes_unis_eau — le signe parle du pays, pas d'une ville
+    if (normalizeToken(parts[0]!) === tailTokens[0]) continue
+    return { tokens: parts.slice(-tailTokens.length), length: tailTokens.length }
+  }
+
+  const last = normalizeToken(parts[parts.length - 1]!)
+  const first = normalizeToken(parts[0]!)
+  if (FR_COUNTRIES.has(last) && !FR_COUNTRIES.has(first)) {
+    return { tokens: [parts[parts.length - 1]!], length: 1 }
+  }
+
+  // Ville + pays + précision (ex. barcelone_espagne_catalan → Barcelone)
+  if (parts.length >= 3 && !FR_COUNTRIES.has(first)) {
+    for (let i = 1; i < parts.length; i++) {
+      if (FR_COUNTRIES.has(normalizeToken(parts[i]!))) {
+        return { tokens: parts.slice(i), length: parts.length - i }
+      }
+    }
+  }
+
+  return null
+}
+
+function getGeoCountryTail(content: string[], signId: string, _lang: Lang): GeoCountryTail | null {
+  const fromId = getGeoCountryTailFromSignId(signId)
+  if (!fromId || content.length < 2) return null
+  return fromId
+}
+
+function geoHeadDisplay(label: string, tail: GeoCountryTail): string {
+  const rawParts = label.trim().split(/\s+/u)
+  const tailNorm = tail.tokens.map(normalizeToken)
+  let cutAt = rawParts.length
+  for (let i = tailNorm.length - 1; i >= 0; i--) {
+    cutAt--
+    while (cutAt >= 0 && normalizeToken(rawParts[cutAt]!) !== tailNorm[i]) cutAt--
+    if (cutAt < 0) return formatPhraseDisplay(label.trim())
+  }
+  return formatPhraseDisplay(rawParts.slice(0, cutAt).join(' '))
+}
+
+/** Nom qualifié par un modificateur (géo ou adjectif) — le modificateur seul ne devient pas une entrée. */
+function getQualifiedNounKind(
+  first: string,
+  second: string,
+  signId: string,
+  lang: Lang,
+): 'geo' | 'adj' | null {
+  if (getGeoCountryTailFromSignId(signId)) return 'geo'
+
+  if (lang !== 'fr') return null
+  const a = normalizeToken(first)
+  const b = normalizeToken(second)
+
+  if (FR_COUNTRIES.has(b) && !FR_COUNTRIES.has(a)) return 'geo'
+
+  // Deux adjectifs coordonnés → synonymes (agressif / brutal), pas un nom qualifié
+  if (isFrenchAdjective(a) && isFrenchAdjective(b)) return null
+
+  if (isFrenchAdjective(b) && !isFrenchAdjective(a)) return 'adj'
+
+  return null
+}
+
+function extractGeoSenses(signId: string, label: string, tail: GeoCountryTail, lang: Lang): DictionarySense[] {
+  const head = geoHeadDisplay(label, tail)
+  const lemma = lemmaFromDisplay(head, lang)
+  if (!lemma) return []
+  return [{ word: head, lemma, senseKey: `${lemma}@${signId}`, signId }]
+}
+
+function extractQualifiedNounSenses(
+  signId: string,
+  label: string,
+  content: string[],
+  kind: 'geo' | 'adj',
+  lang: Lang,
+): DictionarySense[] {
+  const trimmed = label.trim()
+  const labelWords = labelContentWords(trimmed, lang)
+  const headRaw = labelWords[0] ?? decodeSignToken(content[0] ?? '')
+  const head = capitalizeWord(cleanWord(headRaw, { allowNumeric: true }) ?? headRaw)
+  const headLemma = normalizeToken(head)
+  if (!headLemma) return []
+
+  const headSense: DictionarySense = {
+    word: head,
+    lemma: headLemma,
+    senseKey: `${headLemma}@${signId}`,
+    signId,
+  }
+
+  if (kind === 'geo') {
+    const tail = getGeoCountryTail(content, signId, lang) ?? getGeoCountryTailFromSignId(signId)
+    if (tail) return extractGeoSenses(signId, trimmed, tail, lang)
+    return [headSense]
+  }
+
+  const full = qualifiedPhraseDisplay(trimmed, lang)
+  const fullKey = normalizeToken(full)
+  return [
+    headSense,
+    { word: full, lemma: headLemma, senseKey: fullKey, signId },
+  ]
+}
+
 function hasPhraseConnector(signId: string, signTokens: string[], lang: Lang): boolean {
   if (/_heures_/.test(signId)) return true
   if (/_du_/.test(signId) || /_de_/.test(signId) || /_la_/.test(signId) || /_le_/.test(signId)) return true
@@ -237,18 +453,24 @@ function hasVerbalPhrase(content: string[]): boolean {
 
 /** Classifie la structure sémantique d'un signe. */
 export function classifySignStructure(signId: string, label: string, lang: Lang): SignStructure {
-  const signTokens = splitSignId(signId)
-  const content = contentTokens(signTokens, lang)
+  const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  const content = contentTokens(signTokens, lang, signId)
   const trimmed = label.trim()
 
   if (isNumericExpression(signId, trimmed)) return 'phrase'
   if (content.length <= 1) return 'dedicated'
   if (hasVerbalPhrase(content)) return 'phrase'
   if (/[,;]/.test(trimmed)) return 'synonym_list'
+
+  // Lieu + pays (via sign_id) — avant les connecteurs « de / du » dans les noms de villes
+  if (getGeoCountryTail(content, signId, lang)) return 'qualified_noun'
+
   if (hasPhraseConnector(signId, signTokens, lang)) return 'phrase'
 
   if (content.length === 2) {
     const [a, b] = content
+    const qualified = a && b ? getQualifiedNounKind(a, b, signId, lang) : null
+    if (qualified) return 'qualified_noun'
     if (a && b && isTwoTokenPhrase(a, b, lang)) return 'phrase'
     return 'synonym_list'
   }
@@ -270,9 +492,20 @@ function formatPhraseDisplay(text: string): string {
     .join('')
 }
 
+/** Expression qualifiée : tête capitalisée, modificateur(s) tels que dans le libellé source. */
+function qualifiedPhraseDisplay(label: string, lang: Lang): string {
+  const trimmed = label.trim()
+  const words = labelContentWords(trimmed, lang)
+  if (words.length === 0) return formatPhraseDisplay(trimmed)
+  const head = capitalizeWord(words[0]!)
+  const rawParts = trimmed.split(/\s+/u)
+  if (rawParts.length <= 1) return head
+  return `${head} ${rawParts.slice(1).join(' ')}`
+}
+
 function phraseDisplay(signId: string, signTokens: string[], label: string, lang: Lang): string {
   let fromLabel = enrichNumericDisplay(signId, label.trim()).replace(/\s+/g, ' ')
-  const content = contentTokens(signTokens, lang)
+  const content = contentTokens(stripTrailingVariantSuffix(signTokens, signId), lang, signId)
   if (/[,;]/.test(fromLabel) && hasVerbalPhrase(content)) {
     fromLabel = fromLabel.split(/[,;]/)[0]!.trim()
   }
@@ -281,7 +514,7 @@ function phraseDisplay(signId: string, signTokens: string[], label: string, lang
 }
 
 function disambiguatedLabel(lemma: string, signId: string, label: string, lang: Lang): string {
-  const signTokens = contentTokens(splitSignId(signId), lang)
+  const signTokens = contentTokensFromSignId(signId, lang)
   const lemmaNorm = normalizeToken(lemma)
   const context = signTokens
     .filter((t) => normalizeToken(t) !== lemmaNorm)
@@ -300,15 +533,33 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   const trimmed = label.trim()
   if (!trimmed) return []
 
-  const signTokens = splitSignId(signId)
+  const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
   const structure = classifySignStructure(signId, trimmed, lang)
-  const content = contentTokens(signTokens, lang)
+  const content = contentTokens(signTokens, lang, signId)
 
   if (structure === 'phrase') {
+    const geoTail = getGeoCountryTail(content, signId, lang)
+    if (geoTail) return filterDictionarySenses(extractGeoSenses(signId, trimmed, geoTail, lang), signId)
+    if (content.length === 2 && !isNumericExpression(signId, trimmed)) {
+      const [a, b] = content
+      const kind = a && b ? getQualifiedNounKind(a, b, signId, lang) : null
+      if (kind) return filterDictionarySenses(extractQualifiedNounSenses(signId, trimmed, content, kind, lang), signId)
+    }
     const display = phraseDisplay(signId, signTokens, trimmed, lang)
     const senseKey = normalizeToken(display)
     const lemma = lemmaFromDisplay(display, lang)
-    return [{ word: display, lemma, senseKey, signId }]
+    return filterDictionarySenses([{ word: display, lemma, senseKey, signId }], signId)
+  }
+
+  if (structure === 'qualified_noun') {
+    const geoTail = getGeoCountryTail(content, signId, lang)
+    if (geoTail) return filterDictionarySenses(extractGeoSenses(signId, trimmed, geoTail, lang), signId)
+
+    if (content.length >= 2) {
+      const kind = getQualifiedNounKind(content[0]!, content[1]!, signId, lang)
+      if (kind) return filterDictionarySenses(extractQualifiedNounSenses(signId, trimmed, content, kind, lang), signId)
+    }
+    return []
   }
 
   if (structure === 'dedicated') {
@@ -319,7 +570,7 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     if (!raw) return []
     const display = enriched !== trimmed ? formatPhraseDisplay(enriched) : capitalizeWord(raw)
     const lemma = lemmaFromDisplay(display, lang)
-    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+    return filterDictionarySenses([{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }], signId)
   }
 
   // synonym_list : un mot par variante, lié au même signe — clé unique par signe
@@ -329,8 +580,9 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
 
   for (let j = 0; j < content.length; j++) {
     const token = content[j]!
+    if (isSignVariantDigit(token, signId)) continue
     const raw = cleanWord(labelWords[j] ?? decodeSignToken(token), { allowNumeric: /\d/.test(trimmed) })
-    if (!raw || isStopWord(raw, lang)) continue
+    if (!raw || isStopWord(raw, lang) || isDictionaryNoiseDigit(raw, signId)) continue
     const lemma = normalizeToken(raw)
     if (seen.has(lemma)) continue
     seen.add(lemma)
@@ -342,13 +594,13 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     })
   }
 
-  return out
+  return filterDictionarySenses(out, signId)
 }
 
 /** Partage de contexte lexical entre deux sign_id (Jaccard sur tokens de contenu). */
 function tokenOverlap(idA: string, idB: string, lang: Lang): number {
-  const a = new Set(contentTokens(splitSignId(idA), lang).map(normalizeToken))
-  const b = new Set(contentTokens(splitSignId(idB), lang).map(normalizeToken))
+  const a = new Set(contentTokensFromSignId(idA, lang).map(normalizeToken))
+  const b = new Set(contentTokensFromSignId(idB, lang).map(normalizeToken))
   if (a.size === 0 || b.size === 0) return 0
   let inter = 0
   for (const t of a) if (b.has(t)) inter++
@@ -376,10 +628,11 @@ export function areSynonymSigns(
 
   // Composés et expressions : jamais des synonymes d'un lemme isolé
   if (structA === 'phrase' || structB === 'phrase') return false
+  if (structA === 'qualified_noun' || structB === 'qualified_noun') return false
   if (isNumericExpression(signIdA, labelA) || isNumericExpression(signIdB, labelB)) return false
 
-  const contentA = contentTokens(splitSignId(signIdA), lang).map(normalizeToken)
-  const contentB = contentTokens(splitSignId(signIdB), lang).map(normalizeToken)
+  const contentA = contentTokensFromSignId(signIdA, lang).map(normalizeToken)
+  const contentB = contentTokensFromSignId(signIdB, lang).map(normalizeToken)
 
   if (!contentA.includes(lemmaNorm) || !contentB.includes(lemmaNorm)) return false
 
