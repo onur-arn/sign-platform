@@ -27,6 +27,7 @@ const FR_VERB_LIKE = new Set([
   'sortir', 'ouvrir', 'fermer', 'manger', 'boire', 'dormir', 'parler', 'ecouter',
   'regarder', 'jeter', 'lancer', 'pousser', 'tirer', 'porter', 'mettre', 'prendre',
   'donner', 'recevoir', 'aimer', 'detester', 'rire', 'pleurer', 'chanter', 'danser',
+  'toucher', 'sentir', 'goûter', 'gouter',
 ])
 
 /** Nom spécificateur : précise le sens du mot précédent (ex. aile + poulet). */
@@ -71,12 +72,96 @@ const FR_MERGED_PHRASES: [string, string][] = [
   ['plus', 'tard'],
   ['plus', 'tot'],
   ['bien', 'sur'],
+  ['rendez', 'vous'],
+  ['jamais', 'vu'],
 ]
+
+/** Particules dans les noms propres (van Damme, de Gaulle…). */
+const FR_NAME_PARTICLES = new Set([
+  'van', 'von', 'de', 'du', 'des', 'le', 'la', 'der', 'di', 'del', 'da', 'dos', 'das', 'do',
+  'saint', 'sainte', 'ste', 'mc', 'mac',
+])
+
+/** Mots français courants — pas des composants de nom propre. */
+const FR_COMMON_VOCABULARY = new Set([
+  'abces', 'corps', 'dent', 'absent', 'manquer', 'acceder', 'acces', 'accessibilite', 'accent', 'voix',
+  'accident', 'vehicule', 'terrestre', 'actionnaire', 'coupon', 'addiction', 'dependance', 'adjoint',
+  'assistant', 'adroit', 'fin', 'malin', 'affaires', 'etrangeres', 'affiche', 'poster', 'affreux', 'laid',
+  'moche', 'vilain', 'agenda', 'calendrier', 'agent', 'police', 'agressif', 'brutal', 'agriculteur',
+  'ferme', 'fermier', 'ajouter', 'supplement', 'alarme', 'alerte', 'allee', 'chemin', 'sentier',
+  'allemagne', 'allemand', 'alligator', 'caiman', 'crocodile', 'allonger', 'repos', 'animal', 'bete',
+  'animateur', 'animation', 'application', 'app', 'apres', 'demain', 'midi', 'ensuite', 'puis',
+  'argent', 'cout', 'monnaie', 'sou', 'tarif', 'arnaque', 'escroquer', 'art', 'artiste', 'assemblee',
+  'congres', 'assez', 'suffire', 'association', 'societe', 'aa', 'alcooliques', 'anonymes', 'aire',
+  'endroit', 'espace', 'lieu', 'place', 'zone', 'abreger', 'bref', 'court', 'resume', 'synthese',
+  'accrocher', 'portemanteau', 'ah', 'ettonne', 'surprise', 'emotion', 'alphabet', 'dactylologie',
+  'epeler', 'applaudir', 'bravo', 'felicitations', 'appareil', 'photo', 'photographie', 'an', 'age',
+  'ans', 'annee', 'apres', 'periode', 'arete', 'os', 'astronomie', 'telescope', 'atelier', 'activite',
+  'dresse', 'dresser',
+])
+
+function isNameLikeToken(token: string): boolean {
+  const n = normalizeToken(token)
+  if (FR_NAME_PARTICLES.has(n)) return true
+  if (/^(ier|ii|iii|iv|vi)$/.test(n)) return true
+  if (n.length < 2) return false
+  if (isStopWord(n, 'fr')) return false
+  if (FR_VERB_LIKE.has(n) || FR_VERB_LIKE.has(verbStem(n))) return false
+  if (FR_COUNTRIES.has(n)) return false
+  if (FR_CATEGORY_SUFFIXES.has(n)) return false
+  if (FR_ADJECTIVE_HEADS.has(n)) return false
+  if (FR_SPECIFIER_NOUNS.has(n)) return false
+  if (isFrenchAdjective(n)) return false
+  if (FR_COMMON_VOCABULARY.has(n)) return false
+  return true
+}
+
+function isProperNameSign(
+  signId: string,
+  signTokens: string[],
+  content: string[],
+  label: string,
+  lang: Lang,
+): boolean {
+  if (lang !== 'fr' || /[,;]/.test(label)) return false
+
+  const parts = signIdBaseParts(signId).map(normalizeToken)
+  if (parts.length < 2 || parts.length > 6) return false
+  if (getHeadOnlyTailFromSignId(signId)) return false
+  if (hasVerbalPhrase(content)) return false
+
+  const labelWords = label.trim().split(/\s+/u).filter(Boolean)
+  if (labelWords.length !== parts.length) return false
+
+  const hasParticle = parts.some((p) => FR_NAME_PARTICLES.has(p))
+  if (hasParticle) {
+    const nameParts = parts.filter((p) => !FR_NAME_PARTICLES.has(p))
+    return nameParts.length >= 2 && nameParts.every(isNameLikeToken)
+  }
+
+  if (isUnpunctuatedSynonymList(signId, signTokens, content, label, lang)) return false
+
+  if (parts.length >= 2 && parts.length <= 4) {
+    return parts.every(isNameLikeToken)
+  }
+
+  return false
+}
+
+function extractProperNameSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  const content = contentTokens(signTokens, lang, signId)
+  if (!isProperNameSign(signId, signTokens, content, label, lang)) return null
+
+  const display = formatPhraseDisplay(label.trim())
+  const lemma = normalizeToken(display)
+  return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+}
 
 /** Suffixe de catégorie en sign_id (ex. kaki_fruit → « Kaki », koekelberg_ville → « Koekelberg »). */
 const FR_CATEGORY_SUFFIXES = new Set([
   'ville', 'fruit', 'planete', 'lieu', 'anatomie', 'religion', 'prenom', 'marque', 'magasin',
-  'vehicule', 'animal', 'objet', 'flore', 'matiere', 'instrument',
+  'vehicule', 'animal', 'objet', 'flore', 'matiere', 'instrument', 'asbl',
 ])
 
 const STOP_WORDS: Record<Lang, Set<string>> = {
@@ -127,6 +212,26 @@ function mergeFixedPhraseTokens(raw: string[]): string[] {
   return out
 }
 
+/** Expressions figées ≥ 3 mots (ex. s'il vous plait). */
+function mergeMultiWordPhrases(tokens: string[]): string[] {
+  const merged = mergeFixedPhraseTokens(tokens)
+  const out: string[] = []
+  for (let i = 0; i < merged.length; i++) {
+    const n0 = normalizeToken(merged[i]!)
+    if (
+      (n0 === "s'il" || n0 === 'sil') &&
+      normalizeToken(merged[i + 1] ?? '') === 'vous' &&
+      normalizeToken(merged[i + 2] ?? '') === 'plait'
+    ) {
+      out.push([merged[i], merged[i + 1], merged[i + 2]].join(' '))
+      i += 2
+      continue
+    }
+    out.push(merged[i]!)
+  }
+  return out
+}
+
 function mergeSignIdTokens(raw: string[]): string[] {
   const out: string[] = []
   for (let i = 0; i < raw.length; i++) {
@@ -159,7 +264,7 @@ function mergeSignIdTokens(raw: string[]): string[] {
     if (t === 'rsquo') continue
     out.push(t)
   }
-  return mergeFixedPhraseTokens(out)
+  return mergeMultiWordPhrases(out)
 }
 
 export function splitSignId(signId: string): string[] {
@@ -233,6 +338,9 @@ function capitalizeWord(word: string): string {
   if (!word) return word
   const lower = word.toLowerCase()
   if (lower === "quelqu'un") return "Quelqu'un"
+  if (lower === 'rendez vous' || lower === 'rendez-vous') return 'Rendez-vous'
+  if (lower === "s'il vous plait" || lower === "s'il vous plaît") return "S'il vous plaît"
+  if (lower === 'svp') return 'SVP'
   if (lower === "qu'y a-t-il") return "Qu'y a-t-il"
   if (lower === "que se passe-t-il") return "Que se passe-t-il"
   if (lower === "d'accord") return "D'accord"
@@ -259,7 +367,7 @@ function tokenizeLabel(label: string): string[] {
     .replace(/quelqu'un/gi, "quelqu'un")
     .split(/\s+/u)
     .filter(Boolean)
-  return mergeFixedPhraseTokens(tokens)
+  return mergeMultiWordPhrases(tokens)
 }
 
 function labelContentWords(label: string, lang: Lang): string[] {
@@ -268,9 +376,12 @@ function labelContentWords(label: string, lang: Lang): string[] {
   for (const token of tokenizeLabel(label)) {
     if (/^\d+$/.test(token)) continue
     let w = token
-    if (/^l'/i.test(w)) w = w.slice(2)
-    if (/^d'/i.test(w)) w = w.slice(2)
-    if (/^s'/i.test(w)) w = w.slice(2)
+    const isMergedPhrase = /\s/.test(w)
+    if (!isMergedPhrase) {
+      if (/^l'/i.test(w)) w = w.slice(2)
+      if (/^d'/i.test(w)) w = w.slice(2)
+      if (/^s'/i.test(w) && !/^s'il\b/i.test(w)) w = w.slice(2)
+    }
     const cleaned = cleanWord(w, { allowNumeric })
     if (!cleaned || isStopWord(cleaned, lang)) continue
     words.push(cleaned)
@@ -454,7 +565,7 @@ function getGeoCountryTail(content: string[], signId: string, _lang: Lang): GeoC
 /** Tag de désambiguïsation (fruit, ville…) — entrée tête seule, pas le suffixe. */
 function getCategorySuffixTailFromSignId(signId: string): GeoCountryTail | null {
   const parts = signIdBaseParts(signId)
-  if (parts.length !== 2) return null
+  if (parts.length < 2) return null
   const last = normalizeToken(parts[parts.length - 1]!)
   if (!FR_CATEGORY_SUFFIXES.has(last)) return null
   return { tokens: [parts[parts.length - 1]!], length: 1 }
@@ -540,6 +651,60 @@ function isOrphanCategoryToken(token: string, signId: string): boolean {
   if (!FR_CATEGORY_SUFFIXES.has(n)) return false
   const parts = signIdBaseParts(signId).map(normalizeToken)
   return !parts.includes(n)
+}
+
+/**
+ * Tag de catégorie dans le sign_id (fruit, ville, objet…), pas un mot du dictionnaire.
+ * Ex. copier_objet_dupliquer → « objet » est un marqueur, pas un synonyme de copier.
+ * Sauf « objet de literie » où objet fait partie de l'expression.
+ */
+function isSignCategoryMarker(token: string, signId: string): boolean {
+  const n = normalizeToken(stripTokenPunctuation(token))
+  if (!FR_CATEGORY_SUFFIXES.has(n)) return false
+
+  const parts = signIdBaseParts(signId).map(normalizeToken)
+  if (!parts.includes(n)) return false
+  if (parts.length === 1 && parts[0] === n) return false
+
+  const idx = parts.indexOf(n)
+  if (idx === 0) return false
+
+  const next = parts[idx + 1]
+  if (next && ['de', 'du', 'des'].includes(next)) return false
+
+  return true
+}
+
+/** ASBL = forme juridique (association sans but lucratif), pas un mot du dictionnaire. */
+function extractAsblOrganizationSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (lang !== 'fr') return null
+  const parts = signIdBaseParts(signId).map(normalizeToken)
+  if (parts[parts.length - 1] !== 'asbl') return null
+
+  const tail: GeoCountryTail = { tokens: ['asbl'], length: 1 }
+  let head = geoHeadDisplay(label, tail, signId)
+  head = formatPhraseDisplay(head.replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim())
+
+  const lemma = lemmaFromDisplay(head, lang)
+  if (!lemma || lemma === 'asbl') return null
+
+  return [{ word: head, lemma, senseKey: `${normalizeToken(head)}@${signId}`, signId }]
+}
+
+/** OVNI = objet volant non identifié — une seule entrée « Ovni », pas un découpage mot à mot. */
+function extractOvniSenses(signId: string, lang: Lang): DictionarySense[] | null {
+  if (lang !== 'fr' || !/^ovni_objet_volant_non_identifie/.test(signId)) return null
+
+  const withSoucoupe = /soucoupe/.test(signId)
+  const display = withSoucoupe ? 'Ovni (soucoupe)' : 'Ovni'
+  return [
+    {
+      word: display,
+      lemma: 'ovni',
+      senseKey: `${normalizeToken(display)}@${signId}`,
+      signId,
+    },
+  ]
 }
 
 /** Nom qualifié par un modificateur (géo ou adjectif) — le modificateur seul ne devient pas une entrée. */
@@ -775,6 +940,106 @@ function extractCommaQuestionPhrases(signId: string, label: string, lang: Lang):
   })
 }
 
+function lemmaFromCommaSegment(display: string, lang: Lang): string {
+  const contentWords = labelContentWords(display, lang)
+  if (contentWords.length >= 2) return normalizeToken(display)
+  return lemmaFromDisplay(display, lang)
+}
+
+/** Liste de synonymes avec virgules — un segment = une entrée (ex. « gagner de l'argent »). */
+function extractCommaSynonymListSenses(signId: string, label: string, lang: Lang): DictionarySense[] {
+  const out: DictionarySense[] = []
+  const seen = new Set<string>()
+
+  for (const segment of label.split(/[,;]/).map((s) => s.trim()).filter(Boolean)) {
+    const cleaned = segment.replace(/\s+\d+(?=\s|$)/g, ' ').trim()
+    if (!cleaned) continue
+    const display = formatPhraseDisplay(cleaned)
+    const lemma = lemmaFromCommaSegment(display, lang)
+    if (!lemma || seen.has(lemma)) continue
+    if (isSignCategoryMarker(display, signId)) continue
+    seen.add(lemma)
+    out.push({
+      word: display,
+      lemma,
+      senseKey: `${normalizeToken(display)}@${signId}`,
+      signId,
+    })
+  }
+
+  return out
+}
+
+/** ex. repugnant_degoutant_incapable_de_toucher → 3 synonymes dont « incapable de toucher ». */
+function getSynonymVerbalPhraseTail(signId: string): { headParts: string[]; tailParts: string[] } | null {
+  const parts = signIdBaseParts(signId)
+  if (parts.length < 4) return null
+
+  const deIdx = parts.length - 2
+  if (normalizeToken(parts[deIdx]!) !== 'de') return null
+
+  const verb = parts[parts.length - 1]!
+  const verbNorm = normalizeToken(verb)
+  if (
+    !verbNorm ||
+    FR_CATEGORY_SUFFIXES.has(verbNorm) ||
+    FR_COUNTRIES.has(verbNorm) ||
+    isStopWord(verb, 'fr')
+  ) {
+    return null
+  }
+  if (deIdx - 1 < 2) return null
+
+  return {
+    headParts: parts.slice(0, deIdx - 1),
+    tailParts: parts.slice(deIdx - 1),
+  }
+}
+
+function tailPhraseFromLabel(label: string, tailParts: string[]): string {
+  const tailNorm = tailParts.map(normalizeToken)
+  const rawParts = label.trim().split(/\s+/u).map(stripTokenPunctuation)
+  let startIdx = rawParts.length
+
+  for (let i = tailNorm.length - 1; i >= 0; i--) {
+    startIdx--
+    while (startIdx >= 0 && normalizeToken(rawParts[startIdx]!) !== tailNorm[i]) startIdx--
+    if (startIdx < 0) break
+  }
+
+  if (startIdx >= 0) return rawParts.slice(startIdx).join(' ')
+  return tailParts.map(decodeSignToken).join(' ')
+}
+
+function extractSynonymVerbalTailSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  const split = getSynonymVerbalPhraseTail(signId)
+  if (!split || lang !== 'fr') return null
+
+  const senses: DictionarySense[] = []
+  const seen = new Set<string>()
+
+  for (const part of split.headParts) {
+    const display = capitalizeWord(decodeSignToken(part))
+    const lemma = normalizeToken(part)
+    if (seen.has(lemma)) continue
+    seen.add(lemma)
+    senses.push({ word: display, lemma, senseKey: `${lemma}@${signId}`, signId })
+  }
+
+  const tailDisplay = formatPhraseDisplay(tailPhraseFromLabel(label, split.tailParts))
+  const tailLemma = lemmaFromDisplay(tailDisplay, lang)
+  if (!seen.has(tailLemma)) {
+    senses.push({
+      word: tailDisplay,
+      lemma: tailLemma,
+      senseKey: `${normalizeToken(tailDisplay)}@${signId}`,
+      signId,
+    })
+  }
+
+  return senses.length >= 3 ? senses : null
+}
+
 /** Liste de synonymes sans virgule (ex. avenir futur plus tard prochain). */
 function isUnpunctuatedSynonymList(
   signId: string,
@@ -811,6 +1076,8 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   if (isReduplicatedCompound(signId)) return 'dedicated'
   if (content.length <= 1) return 'dedicated'
   if (isPrepositionalVerbList(signId, content, lang)) return 'synonym_list'
+  if (isProperNameSign(signId, signTokens, content, trimmed, lang)) return 'phrase'
+  if (getSynonymVerbalPhraseTail(signId)) return 'synonym_list'
   if (hasVerbalPhrase(content)) return 'phrase'
 
   // Lieu + pays ou suffixe catégorie (ville, fruit…) — via sign_id
@@ -914,6 +1181,18 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   const finSenses = extractPrepositionalFinSenses(signId, trimmed, lang)
   if (finSenses) return filterDictionarySenses(finSenses, signId)
 
+  const ovniSenses = extractOvniSenses(signId, lang)
+  if (ovniSenses) return filterDictionarySenses(ovniSenses, signId)
+
+  const asblSenses = extractAsblOrganizationSenses(signId, trimmed, lang)
+  if (asblSenses) return filterDictionarySenses(asblSenses, signId)
+
+  const properNameSenses = extractProperNameSenses(signId, trimmed, lang)
+  if (properNameSenses) return filterDictionarySenses(properNameSenses, signId)
+
+  const verbalTailSenses = extractSynonymVerbalTailSenses(signId, trimmed, lang)
+  if (verbalTailSenses) return filterDictionarySenses(verbalTailSenses, signId)
+
   const prepVerbSenses = extractPrepositionalVerbSenses(signId, trimmed, lang)
   if (prepVerbSenses) return filterDictionarySenses(prepVerbSenses, signId)
 
@@ -964,6 +1243,10 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   const geoTail = getHeadOnlyTail(content, signId, lang)
   if (geoTail) return filterDictionarySenses(extractGeoSenses(signId, trimmed, geoTail, lang), signId)
 
+  if (/[,;]/.test(trimmed)) {
+    return filterDictionarySenses(extractCommaSynonymListSenses(signId, trimmed, lang), signId)
+  }
+
   const labelWords = labelContentWords(trimmed, lang)
   const out: DictionarySense[] = []
   const seen = new Set<string>()
@@ -973,7 +1256,7 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     if (isSignVariantDigit(token, signId)) continue
     const raw = cleanWord(labelWords[j] ?? decodeSignToken(token), { allowNumeric: /\d/.test(trimmed) })
     if (!raw || isStopWord(raw, lang) || isDictionaryNoiseDigit(raw, signId)) continue
-    if (isOrphanCountryToken(raw, signId) || isOrphanCategoryToken(raw, signId)) continue
+    if (isOrphanCountryToken(raw, signId) || isOrphanCategoryToken(raw, signId) || isSignCategoryMarker(raw, signId)) continue
     const lemma = normalizeToken(raw)
     if (seen.has(lemma)) continue
     seen.add(lemma)
