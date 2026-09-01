@@ -7,19 +7,20 @@ import AvatarLoadingOverlay from '@/components/avatar/AvatarLoadingOverlay'
 
 type DictLang = 'fr' | 'en' | 'tr' | 'pl'
 
-type DuplicateCandidate = {
-  signId: string
-  label: string
-  isPreferred: boolean
-  isManual: boolean
-}
-
 type DuplicateRow = {
   word: string
+  lemma: string
   normalized: string
   preferredSignId: string
   isManual: boolean
-  candidates: DuplicateCandidate[]
+  homonymNote?: string
+  candidates: {
+    signId: string
+    label: string
+    structure?: string
+    isPreferred: boolean
+    isManual: boolean
+  }[]
 }
 
 const SignAvatarPlayer = dynamic(() => import('@/components/avatar/SignAvatarPlayer'), {
@@ -100,14 +101,14 @@ export default function AdminDictionaryDuplicatesView() {
 
   const selectSign = async (row: DuplicateRow, signId: string) => {
     if (row.preferredSignId === signId && row.isManual) return
-    const key = `${row.normalized}:${signId}`
+    const key = `${row.lemma}:${signId}`
     setSavingKey(key)
     setError(null)
     try {
       const res = await fetch('/api/admin/dictionary-preference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lang: dictLang, normalized: row.normalized, signId }),
+        body: JSON.stringify({ lang: dictLang, normalized: row.lemma, signId }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -185,8 +186,8 @@ export default function AdminDictionaryDuplicatesView() {
         </div>
       ) : (
         <ul className="dict-dup-list space-y-3">
-          {items.map((row) => (
-            <li key={row.normalized} className="panel dict-dup-row">
+          {items.map((row, idx) => (
+            <li key={`${row.lemma}-${idx}`} className="panel dict-dup-row">
               <div className="dict-dup-row-head">
                 <strong className="dict-dup-word">{row.word}</strong>
                 {row.isManual ? (
@@ -195,10 +196,13 @@ export default function AdminDictionaryDuplicatesView() {
                   <span className="admin-badge admin-badge-wait">{t.admin.duplicatesAuto}</span>
                 )}
               </div>
+              {row.homonymNote && (
+                <p className="dict-dup-homonym-note">{row.homonymNote}</p>
+              )}
 
               <div className="dict-dup-candidates">
                 {row.candidates.map((c) => {
-                  const key = `${row.normalized}:${c.signId}`
+                  const key = `${row.lemma}:${c.signId}`
                   const isActive = row.preferredSignId === c.signId
                   return (
                     <div
@@ -215,6 +219,9 @@ export default function AdminDictionaryDuplicatesView() {
                           {isActive ? '●' : '○'}
                         </span>
                         <span className="dict-dup-candidate-label">{c.label}</span>
+                        {c.structure && (
+                          <span className="admin-badge dict-dup-structure">{c.structure}</span>
+                        )}
                         <code className="dict-dup-candidate-id">{c.signId}</code>
                       </button>
                       <button

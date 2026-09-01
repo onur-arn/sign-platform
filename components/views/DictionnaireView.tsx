@@ -137,7 +137,7 @@ export default function DictionnaireView() {
           <div className="dict-grid max-h-[480px] overflow-y-auto pr-1">
             {displayed.slice(0, 400).map((s) => (
               <button
-                key={`${s.normalized}-${s.signId}`}
+                key={`${s.senseKey}-${s.signId}`}
                 type="button"
                 className={`dict-chip ${selected?.id === s.signId && selected?.label === s.word ? 'active' : ''}`}
                 onClick={() => setSelected({ id: s.signId, label: s.word, ts: Date.now() })}

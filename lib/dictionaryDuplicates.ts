@@ -1,6 +1,8 @@
 import {
   buildDictionaryEntries,
-  extractWordsFromSign,
+  clusterSynonymSigns,
+  extractDictionarySenses,
+  classifySignStructure,
   resolvePreferredSignId,
   type Lang,
 } from '@/lib/dictionaryEntries'
@@ -9,32 +11,25 @@ import { getSignLabelsMap } from '@/lib/signLabelsMap'
 export type DuplicateCandidate = {
   signId: string
   label: string
+  structure: string
   isPreferred: boolean
   isManual: boolean
 }
 
 export type DuplicateRow = {
   word: string
+  lemma: string
   normalized: string
   preferredSignId: string
   isManual: boolean
+  homonymNote?: string
   candidates: DuplicateCandidate[]
 }
 
-function buildBuckets(labelsMap: Record<string, string>, lang: Lang) {
-  const buckets = new Map<string, { signId: string; word: string }[]>()
-
-  for (const [signId, label] of Object.entries(labelsMap)) {
-    for (const { raw, normalized } of extractWordsFromSign(signId, label, lang)) {
-      const list = buckets.get(normalized) ?? []
-      if (!list.some((x) => x.signId === signId)) {
-        list.push({ signId, word: raw })
-      }
-      buckets.set(normalized, list)
-    }
-  }
-
-  return buckets
+const STRUCTURE_LABEL: Record<string, string> = {
+  dedicated: 'mot unique',
+  phrase: 'expression',
+  synonym_list: 'synonymes',
 }
 
 export function listDictionaryDuplicates(
@@ -43,58 +38,81 @@ export function listDictionaryDuplicates(
   options: { search?: string; offset?: number; limit?: number; onlyUnresolved?: boolean } = {},
 ): { items: DuplicateRow[]; total: number; manualCount: number } {
   const labelsMap = getSignLabelsMap(lang)
-  const buckets = buildBuckets(labelsMap, lang)
   const search = options.search?.trim().toLowerCase() ?? ''
   const onlyUnresolved = options.onlyUnresolved ?? false
+
+  const lemmaToSignIds = new Map<string, Set<string>>()
+  const lemmaDisplay = new Map<string, string>()
+
+  for (const [signId, label] of Object.entries(labelsMap)) {
+    for (const sense of extractDictionarySenses(signId, label, lang)) {
+      const set = lemmaToSignIds.get(sense.lemma) ?? new Set()
+      set.add(signId)
+      lemmaToSignIds.set(sense.lemma, set)
+      if (!lemmaDisplay.has(sense.lemma)) lemmaDisplay.set(sense.lemma, sense.word)
+    }
+  }
 
   let manualCount = 0
   const rows: DuplicateRow[] = []
 
-  for (const [normalized, bucket] of buckets) {
-    const uniqueSignIds = [...new Set(bucket.map((b) => b.signId))]
-    if (uniqueSignIds.length < 2) continue
+  for (const [lemma, signIdSet] of lemmaToSignIds) {
+    const allIds = [...signIdSet]
+    const synonymClusters = clusterSynonymSigns(lemma, allIds, lang, labelsMap)
+    const trueDuplicateClusters = synonymClusters.filter((c) => c.length >= 2)
 
-    const word = bucket[0]?.word ?? normalized
-    if (search && !normalized.includes(search) && !word.toLowerCase().includes(search)) continue
+    if (trueDuplicateClusters.length === 0) continue
 
-    const { signId: preferredSignId, isManual } = resolvePreferredSignId(
-      normalized,
-      uniqueSignIds,
-      labelsMap,
-      lang,
-      preferences,
-    )
+    const word = lemmaDisplay.get(lemma) ?? lemma
+    if (search && !lemma.includes(search) && !word.toLowerCase().includes(search)) continue
 
-    if (isManual) manualCount++
-    if (onlyUnresolved && isManual) continue
+    for (const cluster of trueDuplicateClusters) {
+      const { signId: preferredSignId, isManual } = resolvePreferredSignId(
+        lemma,
+        cluster,
+        lang,
+        preferences,
+      )
 
-    rows.push({
-      word,
-      normalized,
-      preferredSignId,
-      isManual,
-      candidates: uniqueSignIds.map((signId) => ({
-        signId,
-        label: labelsMap[signId] ?? signId,
-        isPreferred: signId === preferredSignId,
-        isManual: isManual && signId === preferredSignId,
-      })),
-    })
+      if (isManual) manualCount++
+      if (onlyUnresolved && isManual) continue
+
+      const homonymCount = allIds.length - cluster.length
+      rows.push({
+        word,
+        lemma,
+        normalized: lemma,
+        preferredSignId,
+        isManual,
+        homonymNote:
+          homonymCount > 0
+            ? `${homonymCount} autre(s) signe(s) avec le même mot mais un sens différent (non listé)`
+            : undefined,
+        candidates: cluster.map((signId) => ({
+          signId,
+          label: labelsMap[signId] ?? signId,
+          structure: STRUCTURE_LABEL[classifySignStructure(signId, labelsMap[signId] ?? '', lang)] ?? '',
+          isPreferred: signId === preferredSignId,
+          isManual: isManual && signId === preferredSignId,
+        })),
+      })
+    }
   }
 
-  rows.sort((a, b) => a.normalized.localeCompare(b.normalized, undefined, { sensitivity: 'base' }))
+  rows.sort((a, b) => a.lemma.localeCompare(b.lemma, undefined, { sensitivity: 'base' }))
 
   const offset = options.offset ?? 0
   const limit = options.limit ?? 30
-  const items = rows.slice(offset, offset + limit)
-
-  return { items, total: rows.length, manualCount }
+  return { items: rows.slice(offset, offset + limit), total: rows.length, manualCount }
 }
 
-/** Entrées finales du dictionnaire (avec préférences appliquées). */
-export function buildDictionaryWithPreferences(
-  lang: Lang,
-  preferences: Record<string, string>,
-) {
+export function buildDictionaryWithPreferences(lang: Lang, preferences: Record<string, string>) {
   return buildDictionaryEntries(getSignLabelsMap(lang), lang, preferences)
+}
+
+export function countDictionaryDuplicates(
+  labelsMap: Record<string, string>,
+  lang: Lang = 'fr',
+): number {
+  return listDictionaryDuplicates(lang, {}, { limit: 1_000_000 }).total
 }

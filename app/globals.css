@@ -1312,6 +1312,18 @@ select {
   word-break: break-all;
 }
 
+.dict-dup-homonym-note {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  color: var(--text-sub);
+  font-style: italic;
+}
+
+.dict-dup-structure {
+  font-size: 0.68rem;
+  flex-shrink: 0;
+}
+
 .dict-dup-pagination {
   display: flex;
   align-items: center;
