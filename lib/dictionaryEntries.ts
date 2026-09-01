@@ -7,24 +7,26 @@ export type DictionaryEntry = {
   signId: string
 }
 
-type Lang = 'fr' | 'en' | 'tr' | 'pl'
+export type Lang = 'fr' | 'en' | 'tr' | 'pl'
 
-const PHRASE_CONNECTORS: Record<Lang, Set<string>> = {
+import { DICTIONARY_PREFERRED_SIGN } from './dictionaryPreferences'
+
+const STOP_WORDS: Record<Lang, Set<string>> = {
   fr: new Set([
-    'du', 'de', 'des', 'le', 'la', 'les', 'un', 'une', 'au', 'aux', 'en', 'y', 'l', 'd',
-    'ce', 'cette', 'ces', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'son', 'sa', 'ses',
-    'notre', 'votre', 'leur', 'leurs', 'qu', 'que', 'qui', 'dont', 'où', 'ou', 'sur', 'sous',
-    'avec', 'sans', 'pour', 'par', 'chez', 'entre', 'vers', 'dans',
+    'a', 'à', 'au', 'aux', 'ce', 'cette', 'ces', 'd', 'dans', 'de', 'des', 'du', 'en', 'l', 'la',
+    'le', 'les', 'leur', 'leurs', 'ma', 'mes', 'mon', 'notre', 'ou', 'par', 'pour', 'qu', 'que',
+    'qui', 'sa', 'se', 'ses', 'son', 'sous', 'sur', 'ta', 'tes', 'ton', 'un', 'une', 'vers', 'vos',
+    'votre', 'with', 'y', 'avec', 'sans', 'chez', 'entre', 'dont', 'ne', 'pas', 'plus', 'moins',
   ]),
   en: new Set([
-    'the', 'a', 'an', 'of', 'to', 'for', 'in', 'on', 'at', 'by', 'with', 'from', 'into',
-    'someone', 'somebody', 'ones', 'one', 'your', 'my', 'his', 'her', 'their', 'our',
+    'a', 'an', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'or', 'the', 'to', 'with',
+    'my', 'your', 'his', 'her', 'our', 'their', 'someone', 'somebody', 'one', 'ones', 'before',
   ]),
   tr: new Set([
-    'bir', 'birine', 'için', 'ile', 've', 'de', 'da', 'ki', 'mi', 'mu', 'mü', 'mı', 'the',
+    'bir', 'birine', 'da', 'de', 'i', 'ile', 'için', 'ki', 'mi', 'mu', 'mü', 'mı', 've', 'the',
   ]),
   pl: new Set([
-    'i', 'w', 'z', 'do', 'na', 'od', 'po', 'dla', 'ze', 'o', 'a', 'u', 'nie', 'się',
+    'a', 'do', 'dla', 'i', 'na', 'nie', 'o', 'od', 'po', 'się', 'u', 'w', 'z', 'ze',
   ]),
 }
 
@@ -53,6 +55,11 @@ function mergeSignIdTokens(raw: string[]): string[] {
       i++
       continue
     }
+    if (t === 'd' && raw[i + 1] === 'accord') {
+      out.push("d'accord")
+      i++
+      continue
+    }
     if (isIgnorableToken(t)) continue
     out.push(t)
   }
@@ -63,32 +70,6 @@ function splitSignId(signId: string): string[] {
   return mergeSignIdTokens(signId.split('_').filter(Boolean))
 }
 
-function tokenizeSegment(segment: string): string[] {
-  const lower = segment.toLowerCase()
-  if (lower.includes("quelqu'un") || lower.includes('quelqu un')) {
-    return segment
-      .replace(/quelqu'un/gi, "quelqu'un")
-      .split(/\s+/u)
-      .filter(Boolean)
-  }
-  return segment.split(/\s+/u).filter(Boolean)
-}
-
-function segmentHasPhraseConnector(segment: string, lang: Lang): boolean {
-  const connectors = PHRASE_CONNECTORS[lang]
-  const tokens = tokenizeSegment(segment).map((t) =>
-    t
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/^quelqu'un$/u, "quelqu'un"),
-  )
-  return tokens.some((t) => {
-    if (t === "quelqu'un") return false
-    return connectors.has(t)
-  })
-}
-
 function normalizeToken(token: string): string {
   return token
     .toLowerCase()
@@ -97,19 +78,12 @@ function normalizeToken(token: string): string {
     .replace(/ı/g, 'i')
 }
 
-function signIdLooksLikePhrase(signId: string, label: string, lang: Lang): boolean {
-  const tokens = splitSignId(signId).map(normalizeToken)
-  const connectors = PHRASE_CONNECTORS[lang]
-  if (tokens.some((t) => t !== "quelqu'un" && connectors.has(t))) return true
+function normalizeKey(word: string): string {
+  return normalizeToken(word)
+}
 
-  const labelWords = label.trim().split(/\s+/u).filter(Boolean)
-  // Expression nominale longue sans liste de synonymes (ex. accident vasculaire cérébral)
-  if (!/[,;]/.test(label) && tokens.length >= 4 && labelWords.length >= 4) {
-    const head = normalizeToken(labelWords[0] ?? '')
-    if (head && head === tokens[0]) return true
-  }
-
-  return false
+function isStopWord(token: string, lang: Lang): boolean {
+  return STOP_WORDS[lang].has(normalizeToken(token))
 }
 
 /** Nettoie un mot candidat (suffixes numériques isolés, ponctuation). */
@@ -120,7 +94,7 @@ function cleanWord(raw: string): string | null {
   if (/^\d+\s/.test(w)) w = w.replace(/^\d+\s+/, '')
   w = w.replace(/\s+\d+$/, '').trim()
   if (!w || w.length < 2) return null
-  if (/^[^\p{L}]+$/u.test(w)) return null
+  if (/^[^\p{L}\d]+$/u.test(w)) return null
   return w
 }
 
@@ -128,6 +102,7 @@ function capitalizeWord(word: string): string {
   if (!word) return word
   const lower = word.toLowerCase()
   if (lower === "quelqu'un") return "Quelqu'un"
+  if (lower === "d'accord") return "D'accord"
   const parts = word.split(/(['-])/u)
   return parts
     .map((part, i) => {
@@ -140,71 +115,165 @@ function capitalizeWord(word: string): string {
     .join('')
 }
 
-function normalizeKey(word: string): string {
-  return word
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ı/g, 'i')
+function tokenizeLabel(label: string): string[] {
+  return label
+    .replace(/l'avance/gi, 'l avance')
+    .replace(/l'air/gi, 'l air')
+    .replace(/d'accord/gi, 'd accord')
+    .replace(/d'avis/gi, 'd avis')
+    .replace(/quelqu'un/gi, "quelqu'un")
+    .split(/\s+/u)
+    .filter(Boolean)
 }
 
-/** Extrait des mots individuels d'un segment (synonymes séparés par des espaces). */
-function wordsFromSegment(segment: string): string[] {
-  const out: string[] = []
-  for (const chunk of tokenizeSegment(segment)) {
-    const cleaned = cleanWord(chunk)
-    if (cleaned) out.push(cleaned)
-  }
-  return out
-}
-
-/** Décompose un libellé en mots de dictionnaire. */
-function expandLabel(label: string, lang: Lang): string[] {
-  const trimmed = label.trim()
-  if (!trimmed) return []
-
-  const hasListPunctuation = /[,;]/.test(trimmed)
-  const segments = hasListPunctuation
-    ? trimmed.split(/[,;]+/u).map((s) => s.trim()).filter(Boolean)
-    : [trimmed]
-
+function labelContentWords(label: string, lang: Lang): string[] {
   const words: string[] = []
-
-  for (const segment of segments) {
-    if (segmentHasPhraseConnector(segment, lang)) {
-      const phrase = cleanPhrase(segment)
-      if (phrase) words.push(phrase)
-      continue
-    }
-
-    if (hasListPunctuation || !segment.includes(' ')) {
-      words.push(...wordsFromSegment(segment))
-      continue
-    }
-
-    // Sans virgule : plusieurs mots → synonymes (ex. « Acceder acces »)
-    words.push(...wordsFromSegment(segment))
+  for (const token of tokenizeLabel(label)) {
+    let w = token
+    if (/^l'/i.test(w)) w = w.slice(2)
+    if (/^d'/i.test(w)) w = w.slice(2)
+    const cleaned = cleanWord(w)
+    if (!cleaned || isStopWord(cleaned, lang)) continue
+    words.push(cleaned)
   }
-
   return words
 }
 
-function cleanPhrase(phrase: string): string | null {
-  const p = phrase.trim().replace(/\s+/g, ' ')
-  return p.length >= 2 ? p : null
+/** Expressions figées conservées en une seule entrée. */
+function isFixedPhrase(signId: string, signTokens: string[], lang: Lang): boolean {
+  if (/_heures_/.test(signId)) return true
+  if (/^accident_/.test(signId) && signTokens.length >= 3) return true
+  if (/^cent_/.test(signId) || /_\d+_cent_/.test(signId) || /^\d+_cent_/.test(signId)) return true
+  if (/_du_travail$/.test(signId)) return true
+  if (/_cote_de/.test(signId) && signTokens.length <= 4) return true
+  if (/_la_fin/.test(signId)) return true
+  if (/_mon_tour$/.test(signId) || /_son_tour$/.test(signId) || /_ton_tour$/.test(signId)) return true
+  if (/_partir_de/.test(signId) && signTokens.length <= 4) return true
+  if (/_propos_de/.test(signId)) return true
+  if (/_la_main/.test(signId) && signTokens.length >= 3) return true
+  if (/_le_bras/.test(signId) || /_le_coup/.test(signId)) return true
+  if (/_1_an$/.test(signId) || /_ans_duree$/.test(signId)) return true
+  if (/_semaine/.test(signId) && signTokens.length <= 3) return true
+  if (/_mois/.test(signId) && signTokens.length <= 3) return true
+
+  const content = contentTokens(signTokens, lang)
+  // Idiom court : un seul mot de contenu (ex. « à mon tour », « à la fin »)
+  if (signTokens.length <= 4 && content.length === 1) return true
+
+  return false
 }
 
-/** Mots issus du sign_id lorsque le libellé est une liste de synonymes. */
-function wordsFromSignId(signId: string): string[] {
-  return splitSignId(signId)
-    .map(decodeSignToken)
-    .map((w) => cleanWord(w))
-    .filter((w): w is string => Boolean(w))
+function contentTokens(signTokens: string[], lang: Lang): string[] {
+  return signTokens.filter((t) => !isStopWord(t, lang))
 }
 
-function pickDisplayWord(labelWord: string | undefined, signToken: string | undefined, fallback: string): string {
-  const candidate = labelWord ?? signToken ?? fallback
-  return capitalizeWord(candidate)
+type WordCandidate = { raw: string; normalized: string; tokenIndex: number }
+
+/** Extrait les mots de dictionnaire à partir d'un sign_id et de son libellé. */
+export function extractWordsFromSign(signId: string, label: string, lang: Lang): WordCandidate[] {
+  const trimmedLabel = label.trim()
+  if (!trimmedLabel) return []
+
+  const signTokens = splitSignId(signId)
+  const hasListPunctuation = /[,;]/.test(trimmedLabel)
+
+  if (isFixedPhrase(signId, signTokens, lang) && !hasListPunctuation) {
+    const phrase = trimmedLabel.replace(/\s+\d+(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim()
+    const normalized = normalizeKey(phrase)
+    if (!normalized) return []
+    return [{ raw: phrase, normalized, tokenIndex: 0 }]
+  }
+
+  if (hasListPunctuation) {
+    return expandLabelParts(signId, trimmedLabel, lang)
+  }
+
+  const contentSign = signTokens
+    .map((token, index) => ({ token, index }))
+    .filter(({ token }) => !isStopWord(token, lang))
+
+  const contentLabels = labelContentWords(trimmedLabel, lang)
+  const out: WordCandidate[] = []
+  const seen = new Set<string>()
+
+  for (let j = 0; j < contentSign.length; j++) {
+    const { token, index } = contentSign[j]!
+    const labelWord = contentLabels[j]
+    const raw = cleanWord(labelWord ?? decodeSignToken(token))
+    if (!raw || isStopWord(raw, lang)) continue
+
+    const normalized = normalizeKey(raw)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push({ raw, normalized, tokenIndex: index })
+  }
+
+  if (out.length === 0 && signTokens.length === 1) {
+    const raw = cleanWord(trimmedLabel)
+    if (!raw) return []
+    return [{ raw, normalized: normalizeKey(raw), tokenIndex: 0 }]
+  }
+
+  return out
+}
+
+function expandLabelParts(signId: string, label: string, lang: Lang): WordCandidate[] {
+  const segments = label
+    .split(/[,;]+/u)
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  const out: WordCandidate[] = []
+  const seen = new Set<string>()
+
+  for (const segment of segments) {
+    for (const raw of labelContentWords(segment.replace(/\s+\d+(?=\s|$)/g, ' '), lang)) {
+      const normalized = normalizeKey(raw)
+      if (!normalized || seen.has(normalized)) continue
+      seen.add(normalized)
+      out.push({ raw, normalized, tokenIndex: 0 })
+    }
+  }
+
+  if (out.length > 0) return out
+
+  return extractWordsFromSign(signId, label.replace(/[,;]/g, ' '), lang)
+}
+
+function scoreSignForWord(signId: string, normalized: string, tokenIndex: number): number {
+  const preferred = DICTIONARY_PREFERRED_SIGN
+  let score = 0
+
+  const tokens = splitSignId(signId).map(normalizeToken)
+  if (tokens[tokenIndex] === normalized) score += 100
+  if (tokens.includes(normalized)) score += 50
+  if (tokens[0] === normalized) score += 30
+  if (signId === normalized) score += 80
+  if (signId.startsWith(`${normalized}_`) || signId.endsWith(`_${normalized}`)) score += 40
+
+  // Signe dédié (peu de synonymes) préféré aux fourre-tout
+  score -= tokens.length * 2
+  score -= signId.length * 0.05
+
+  return score
+}
+
+function pickBestEntry(
+  normalized: string,
+  candidates: DictionaryEntry[],
+  lang: Lang,
+): DictionaryEntry {
+  const preferredId = DICTIONARY_PREFERRED_SIGN[lang][normalized]
+  if (preferredId) {
+    const forced = candidates.find((c) => c.signId === preferredId)
+    if (forced) return forced
+  }
+
+  return candidates.reduce((best, cur) => {
+    const bestScore = scoreSignForWord(best.signId, normalized, 0)
+    const curScore = scoreSignForWord(cur.signId, normalized, 0)
+    return curScore > bestScore ? cur : best
+  })
 }
 
 /**
@@ -214,76 +283,40 @@ export function buildDictionaryEntries(
   labelsMap: Record<string, string>,
   lang: Lang = 'fr',
 ): DictionaryEntry[] {
-  const byNormalized = new Map<string, DictionaryEntry>()
+  const buckets = new Map<string, DictionaryEntry[]>()
 
   for (const [signId, label] of Object.entries(labelsMap)) {
-    const trimmedLabel = label.trim()
-    if (!trimmedLabel) continue
-
-    const hasListPunctuation = /[,;]/.test(trimmedLabel)
-    const isPhrase = signIdLooksLikePhrase(signId, trimmedLabel, lang)
-    const signTokens = wordsFromSignId(signId)
-
-    let words: string[] = []
-
-    if (isPhrase && !hasListPunctuation) {
-      words = [trimmedLabel]
-    } else if (hasListPunctuation) {
-      words = expandLabel(trimmedLabel, lang)
-    } else if (signTokens.length > 1) {
-      // Liste de synonymes dans le sign_id (ex. accelerer_depecher_fort_…)
-      const labelWords = wordsFromSegment(trimmedLabel)
-      words = signTokens.map((token, i) => labelWords[i] ?? token)
-    } else {
-      words = expandLabel(trimmedLabel, lang)
-    }
-
-    // Dédupliquer au sein d'un même signe
-    const seenInSign = new Set<string>()
-    for (let i = 0; i < words.length; i++) {
-      const raw = words[i]!
-      const normalized = normalizeKey(raw)
-      if (!normalized || seenInSign.has(normalized)) continue
-      seenInSign.add(normalized)
-
-      const display = pickDisplayWord(raw, signTokens[i], raw)
-      if (display.includes(',') || display.includes(';')) {
-        for (const sub of expandLabel(display, lang)) {
-          addEntry(sub, signId, signTokens, i, byNormalized)
-        }
-        continue
-      }
-      addEntry(display, signId, signTokens, i, byNormalized)
+    for (const { raw, normalized, tokenIndex } of extractWordsFromSign(signId, label, lang)) {
+      const display = capitalizeWord(raw)
+      const entry: DictionaryEntry = { word: display, normalized, signId }
+      const list = buckets.get(normalized) ?? []
+      if (!list.some((e) => e.signId === signId)) list.push(entry)
+      buckets.set(normalized, list)
     }
   }
 
-  return Array.from(byNormalized.values()).sort((a, b) =>
+  const entries: DictionaryEntry[] = []
+  for (const [normalized, candidates] of buckets) {
+    entries.push(pickBestEntry(normalized, candidates, lang))
+  }
+
+  return entries.sort((a, b) =>
     a.normalized.localeCompare(b.normalized, undefined, { sensitivity: 'base' }),
   )
 }
 
-function addEntry(
-  raw: string,
-  signId: string,
-  signTokens: string[],
-  tokenIndex: number,
-  byNormalized: Map<string, DictionaryEntry>,
-) {
-  const normalized = normalizeKey(raw)
-  if (!normalized) return
-
-  const display = capitalizeWord(raw)
-  const entry: DictionaryEntry = { word: display, normalized, signId }
-
-  const existing = byNormalized.get(normalized)
-  if (!existing) {
-    byNormalized.set(normalized, entry)
-    return
+/** Compte les mots en doublon (plusieurs signes possibles). */
+export function countDictionaryDuplicates(
+  labelsMap: Record<string, string>,
+  lang: Lang = 'fr',
+): number {
+  const buckets = new Map<string, Set<string>>()
+  for (const [signId, label] of Object.entries(labelsMap)) {
+    for (const { normalized } of extractWordsFromSign(signId, label, lang)) {
+      const set = buckets.get(normalized) ?? new Set()
+      set.add(signId)
+      buckets.set(normalized, set)
+    }
   }
-
-  const primaryToken = normalizeKey(signTokens[0] ?? '')
-  const wordNorm = normalized
-  if (primaryToken === wordNorm && tokenIndex === 0) {
-    byNormalized.set(normalized, entry)
-  }
+  return [...buckets.values()].filter((s) => s.size > 1).length
 }
