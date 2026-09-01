@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { SIGN_LABELS_FR, SIGN_LABELS_EN, SIGN_LABELS_TR, SIGN_LABELS_PL } from '@/lib/signLabels'
 import { buildDictionaryEntries } from '@/lib/dictionaryEntries'
+import { isNumericExpression } from '@/lib/dictionarySemantics'
 import AvatarLoadingOverlay from '@/components/avatar/AvatarLoadingOverlay'
 
 function AvatarChunkFallback() {
@@ -27,8 +28,9 @@ function removeAccents(str: string) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i')
 }
 
-function firstLetter(label: string) {
-  const c = removeAccents(label.trim().toUpperCase())[0] ?? '#'
+function dictionarySection(entry: { word: string; signId: string }) {
+  if (isNumericExpression(entry.signId, entry.word)) return '#'
+  const c = removeAccents(entry.word.trim().toUpperCase())[0] ?? '#'
   return /[A-Z]/.test(c) ? c : '#'
 }
 
@@ -79,7 +81,7 @@ export default function DictionnaireView() {
       return allSigns.filter((s) => s.normalized.includes(q) || removeAccents(s.word.toLowerCase()).includes(q))
     }
     if (activeLetter === 'ALL') return allSigns
-    return allSigns.filter((s) => firstLetter(s.word) === activeLetter)
+    return allSigns.filter((s) => dictionarySection(s) === activeLetter)
   }, [allSigns, activeLetter, search])
 
   const handleLetter = useCallback((letter: string) => {

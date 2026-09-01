@@ -277,7 +277,7 @@ function labelContentWords(label: string, lang: Lang): string[] {
 }
 
 /** Chiffres, heures, durées, nombres composés (cent dix, 10 heures…). */
-function isNumericExpression(signId: string, label: string): boolean {
+export function isNumericExpression(signId: string, label: string): boolean {
   const trimmed = label.trim()
   if (/\d+\s*(heures?|h\b|an|ans|mois|semaine|jours?|cent|cents|dix|vingt|mille|un|deux|trois)/i.test(trimmed)) {
     return true
