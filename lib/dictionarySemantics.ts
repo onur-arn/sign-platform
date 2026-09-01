@@ -347,16 +347,37 @@ function getGeoCountryTail(content: string[], signId: string, _lang: Lang): GeoC
   return fromId
 }
 
-function geoHeadDisplay(label: string, tail: GeoCountryTail): string {
-  const rawParts = label.trim().split(/\s+/u)
+function stripTokenPunctuation(token: string): string {
+  return token.replace(/^[,;.:]+|[,;.:]+$/g, '')
+}
+
+function geoHeadDisplay(label: string, tail: GeoCountryTail, signId?: string): string {
+  const rawParts = label.trim().split(/\s+/u).map(stripTokenPunctuation)
   const tailNorm = tail.tokens.map(normalizeToken)
   let cutAt = rawParts.length
   for (let i = tailNorm.length - 1; i >= 0; i--) {
     cutAt--
     while (cutAt >= 0 && normalizeToken(rawParts[cutAt]!) !== tailNorm[i]) cutAt--
-    if (cutAt < 0) return formatPhraseDisplay(label.trim())
+    if (cutAt < 0) break
   }
-  return formatPhraseDisplay(rawParts.slice(0, cutAt).join(' '))
+  if (cutAt >= 0) {
+    return formatPhraseDisplay(rawParts.slice(0, cutAt).join(' '))
+  }
+  if (signId) {
+    const parts = signIdBaseParts(signId)
+    const headParts = parts.slice(0, parts.length - tail.length)
+    if (headParts.length > 0) {
+      return formatPhraseDisplay(headParts.map(decodeSignToken).join(' '))
+    }
+  }
+  return formatPhraseDisplay(label.trim())
+}
+
+function isOrphanCountryToken(token: string, signId: string): boolean {
+  const n = normalizeToken(stripTokenPunctuation(token))
+  if (!FR_COUNTRIES.has(n)) return false
+  const parts = signIdBaseParts(signId).map(normalizeToken)
+  return !parts.includes(n)
 }
 
 /** Nom qualifié par un modificateur (géo ou adjectif) — le modificateur seul ne devient pas une entrée. */
@@ -383,7 +404,7 @@ function getQualifiedNounKind(
 }
 
 function extractGeoSenses(signId: string, label: string, tail: GeoCountryTail, lang: Lang): DictionarySense[] {
-  const head = geoHeadDisplay(label, tail)
+  const head = geoHeadDisplay(label, tail, signId)
   const lemma = lemmaFromDisplay(head, lang)
   if (!lemma) return []
   return [{ word: head, lemma, senseKey: `${lemma}@${signId}`, signId }]
@@ -460,10 +481,11 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   if (isNumericExpression(signId, trimmed)) return 'phrase'
   if (content.length <= 1) return 'dedicated'
   if (hasVerbalPhrase(content)) return 'phrase'
-  if (/[,;]/.test(trimmed)) return 'synonym_list'
 
-  // Lieu + pays (via sign_id) — avant les connecteurs « de / du » dans les noms de villes
+  // Lieu + pays (via sign_id) — avant la virgule dans « Alaska, USA » (PL) ou listes FR
   if (getGeoCountryTail(content, signId, lang)) return 'qualified_noun'
+
+  if (/[,;]/.test(trimmed)) return 'synonym_list'
 
   if (hasPhraseConnector(signId, signTokens, lang)) return 'phrase'
 
@@ -574,6 +596,9 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   }
 
   // synonym_list : un mot par variante, lié au même signe — clé unique par signe
+  const geoTail = getGeoCountryTail(content, signId, lang)
+  if (geoTail) return filterDictionarySenses(extractGeoSenses(signId, trimmed, geoTail, lang), signId)
+
   const labelWords = labelContentWords(trimmed, lang)
   const out: DictionarySense[] = []
   const seen = new Set<string>()
@@ -583,6 +608,7 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     if (isSignVariantDigit(token, signId)) continue
     const raw = cleanWord(labelWords[j] ?? decodeSignToken(token), { allowNumeric: /\d/.test(trimmed) })
     if (!raw || isStopWord(raw, lang) || isDictionaryNoiseDigit(raw, signId)) continue
+    if (isOrphanCountryToken(raw, signId)) continue
     const lemma = normalizeToken(raw)
     if (seen.has(lemma)) continue
     seen.add(lemma)
