@@ -100,7 +100,6 @@ function mergeSignIdTokens(raw: string[]): string[] {
       continue
     }
     if (t === 'rsquo') continue
-    if (/^\d+$/.test(t)) continue
     out.push(t)
   }
   return out
@@ -118,12 +117,16 @@ function contentTokens(signTokens: string[], lang: Lang): string[] {
   return signTokens.filter((t) => !isStopWord(t, lang))
 }
 
-function cleanWord(raw: string): string | null {
+function cleanWord(raw: string, opts?: { allowNumeric?: boolean }): string | null {
   let w = raw.trim().replace(/^['"\s]+|['"\s.,;]+$/g, '')
   if (!w) return null
-  if (/^\d+$/.test(w)) return null
-  w = w.replace(/^\d+\s+/, '').replace(/\s+\d+$/, '').trim()
-  if (!w || w.length < 2) return null
+  if (/^\d+$/.test(w)) {
+    if (opts?.allowNumeric || w.length <= 4) return w
+    return null
+  }
+  // Suffixe variante (ex. « jeter 2 ») — pas les nombres dans « 10 heures »
+  w = w.replace(/\s+(\d)$/, '').trim()
+  if (!w || (w.length < 2 && !/^\d$/.test(w))) return null
   if (/^[^\p{L}\d]+$/u.test(w)) return null
   return w
 }
@@ -159,17 +162,50 @@ function tokenizeLabel(label: string): string[] {
 }
 
 function labelContentWords(label: string, lang: Lang): string[] {
+  const allowNumeric = /\d/.test(label)
   const words: string[] = []
   for (const token of tokenizeLabel(label)) {
     let w = token
     if (/^l'/i.test(w)) w = w.slice(2)
     if (/^d'/i.test(w)) w = w.slice(2)
     if (/^s'/i.test(w)) w = w.slice(2)
-    const cleaned = cleanWord(w)
+    const cleaned = cleanWord(w, { allowNumeric })
     if (!cleaned || isStopWord(cleaned, lang)) continue
     words.push(cleaned)
   }
   return words
+}
+
+/** Chiffres, heures, durées, nombres composés (cent dix, 10 heures…). */
+function isNumericExpression(signId: string, label: string): boolean {
+  const trimmed = label.trim()
+  if (/\d+\s*(heures?|h\b|an|ans|mois|semaine|jours?|cent|cents|dix|vingt|mille|un|deux|trois)/i.test(trimmed)) {
+    return true
+  }
+  if (/^\d+_/.test(signId)) return true
+  if (/^en_\d+_/.test(signId) || /^a_\d+_heures/.test(signId)) return true
+  if (/_\d+_(heures|heure|an|mois|semaine|jour|cent|dix|vingt)/i.test(signId)) return true
+  if (/^\d{2,}_(cent|dix|vingt|onze|douze|treize|quatorze|quinze|seize)/i.test(signId)) return true
+  return false
+}
+
+function enrichNumericDisplay(signId: string, label: string): string {
+  const trimmed = label.trim()
+  const leading = signId.match(/^(\d+)_/)
+  if (leading && !trimmed.includes(leading[1]!)) {
+    return `${leading[1]} ${trimmed}`
+  }
+  return trimmed
+}
+
+function lemmaFromDisplay(display: string, lang: Lang): string {
+  const digit = display.match(/\d+/)
+  if (digit) return digit[0]!
+  for (const token of tokenizeLabel(display)) {
+    const cleaned = cleanWord(token, { allowNumeric: true })
+    if (cleaned && !isStopWord(cleaned, lang)) return normalizeToken(cleaned)
+  }
+  return normalizeToken(display)
 }
 
 function hasPhraseConnector(signId: string, signTokens: string[], lang: Lang): boolean {
@@ -205,6 +241,7 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   const content = contentTokens(signTokens, lang)
   const trimmed = label.trim()
 
+  if (isNumericExpression(signId, trimmed)) return 'phrase'
   if (content.length <= 1) return 'dedicated'
   if (hasVerbalPhrase(content)) return 'phrase'
   if (/[,;]/.test(trimmed)) return 'synonym_list'
@@ -222,14 +259,25 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   return 'synonym_list'
 }
 
-function phraseDisplay(signTokens: string[], label: string, lang: Lang): string {
-  let fromLabel = label.trim().replace(/\s+\d+(?=\s|$)/g, ' ').replace(/\s+/g, ' ')
+function formatPhraseDisplay(text: string): string {
+  return text
+    .split(/(\s+)/)
+    .map((part) => {
+      if (/^\s+$/.test(part)) return part
+      if (/^\d+$/.test(part)) return part
+      return capitalizeWord(part)
+    })
+    .join('')
+}
+
+function phraseDisplay(signId: string, signTokens: string[], label: string, lang: Lang): string {
+  let fromLabel = enrichNumericDisplay(signId, label.trim()).replace(/\s+/g, ' ')
   const content = contentTokens(signTokens, lang)
   if (/[,;]/.test(fromLabel) && hasVerbalPhrase(content)) {
     fromLabel = fromLabel.split(/[,;]/)[0]!.trim()
   }
-  if (fromLabel) return capitalizeWord(fromLabel)
-  return capitalizeWord(content.map(decodeSignToken).join(' '))
+  if (fromLabel) return formatPhraseDisplay(fromLabel)
+  return formatPhraseDisplay(content.map(decodeSignToken).join(' '))
 }
 
 function disambiguatedLabel(lemma: string, signId: string, label: string, lang: Lang): string {
@@ -257,17 +305,21 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   const content = contentTokens(signTokens, lang)
 
   if (structure === 'phrase') {
-    const display = phraseDisplay(signTokens, trimmed, lang)
+    const display = phraseDisplay(signId, signTokens, trimmed, lang)
     const senseKey = normalizeToken(display)
-    const lemma = normalizeToken(content[0] ?? display)
+    const lemma = lemmaFromDisplay(display, lang)
     return [{ word: display, lemma, senseKey, signId }]
   }
 
   if (structure === 'dedicated') {
-    const raw = cleanWord(labelContentWords(trimmed, lang)[0] ?? decodeSignToken(content[0] ?? signId))
+    const enriched = enrichNumericDisplay(signId, trimmed)
+    const raw = cleanWord(labelContentWords(enriched, lang)[0] ?? decodeSignToken(content[0] ?? signId), {
+      allowNumeric: true,
+    })
     if (!raw) return []
-    const lemma = normalizeToken(raw)
-    return [{ word: capitalizeWord(raw), lemma, senseKey: `${lemma}@${signId}`, signId }]
+    const display = enriched !== trimmed ? formatPhraseDisplay(enriched) : capitalizeWord(raw)
+    const lemma = lemmaFromDisplay(display, lang)
+    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
 
   // synonym_list : un mot par variante, lié au même signe — clé unique par signe
@@ -277,7 +329,7 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
 
   for (let j = 0; j < content.length; j++) {
     const token = content[j]!
-    const raw = cleanWord(labelWords[j] ?? decodeSignToken(token))
+    const raw = cleanWord(labelWords[j] ?? decodeSignToken(token), { allowNumeric: /\d/.test(trimmed) })
     if (!raw || isStopWord(raw, lang)) continue
     const lemma = normalizeToken(raw)
     if (seen.has(lemma)) continue
@@ -324,6 +376,7 @@ export function areSynonymSigns(
 
   // Composés et expressions : jamais des synonymes d'un lemme isolé
   if (structA === 'phrase' || structB === 'phrase') return false
+  if (isNumericExpression(signIdA, labelA) || isNumericExpression(signIdB, labelB)) return false
 
   const contentA = contentTokens(splitSignId(signIdA), lang).map(normalizeToken)
   const contentB = contentTokens(splitSignId(signIdB), lang).map(normalizeToken)
