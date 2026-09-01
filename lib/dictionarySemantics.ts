@@ -233,6 +233,8 @@ function capitalizeWord(word: string): string {
   if (!word) return word
   const lower = word.toLowerCase()
   if (lower === "quelqu'un") return "Quelqu'un"
+  if (lower === "qu'y a-t-il") return "Qu'y a-t-il"
+  if (lower === "que se passe-t-il") return "Que se passe-t-il"
   if (lower === "d'accord") return "D'accord"
   if (lower === "s'envoler") return "S'envoler"
   const parts = word.split(/(['-])/u)
@@ -469,7 +471,45 @@ function getHeadOnlyTail(content: string[], signId: string, lang: Lang): GeoCoun
 }
 
 function stripTokenPunctuation(token: string): string {
-  return token.replace(/^[,;.:]+|[,;.:]+$/g, '')
+  return token.replace(/^[,;.:?]+|[,;.:?]+$/g, '')
+}
+
+function stripRelationalPrefix(word: string): string {
+  const w = stripTokenPunctuation(word)
+  if (/^d['']/i.test(w)) return w.replace(/^d['']/i, '')
+  return w.replace(/^(de|du|des)\s+/i, '')
+}
+
+function geoHeadFromSignId(signId: string, tail: GeoCountryTail): string {
+  const tokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  const tailNorm = tail.tokens.map(normalizeToken)
+  let cutAt = tokens.length
+
+  for (let i = tailNorm.length - 1; i >= 0; i--) {
+    cutAt--
+    while (cutAt >= 0) {
+      const tok = normalizeToken(stripRelationalPrefix(decodeSignToken(tokens[cutAt]!)))
+      if (tok === tailNorm[i]) break
+      cutAt--
+    }
+    if (cutAt < 0) break
+  }
+
+  if (cutAt >= 0) {
+    const headTokens = tokens.slice(0, cutAt).filter((t) => {
+      const n = normalizeToken(t)
+      return n !== 'rsquo' && !FR_RELATIONAL_BEFORE_COUNTRY.has(n)
+    })
+    if (headTokens.length > 0) {
+      return formatPhraseDisplay(headTokens.map(decodeSignToken).join(' '))
+    }
+  }
+
+  if (tokens.length >= 2 && FR_COUNTRIES.has(tailNorm[0]!)) {
+    return formatPhraseDisplay(decodeSignToken(tokens[0]!))
+  }
+
+  return formatPhraseDisplay(tokens.slice(0, -tail.length).map(decodeSignToken).join(' '))
 }
 
 function geoHeadDisplay(label: string, tail: GeoCountryTail, signId?: string): string {
@@ -478,19 +518,13 @@ function geoHeadDisplay(label: string, tail: GeoCountryTail, signId?: string): s
   let cutAt = rawParts.length
   for (let i = tailNorm.length - 1; i >= 0; i--) {
     cutAt--
-    while (cutAt >= 0 && normalizeToken(rawParts[cutAt]!) !== tailNorm[i]) cutAt--
+    while (cutAt >= 0 && normalizeToken(stripRelationalPrefix(rawParts[cutAt]!)) !== tailNorm[i]) cutAt--
     if (cutAt < 0) break
   }
   if (cutAt >= 0) {
     return formatPhraseDisplay(rawParts.slice(0, cutAt).join(' '))
   }
-  if (signId) {
-    const parts = signIdBaseParts(signId)
-    const headParts = parts.slice(0, parts.length - tail.length)
-    if (headParts.length > 0) {
-      return formatPhraseDisplay(headParts.map(decodeSignToken).join(' '))
-    }
-  }
+  if (signId) return geoHeadFromSignId(signId, tail)
   return formatPhraseDisplay(label.trim())
 }
 
@@ -575,9 +609,47 @@ function extractQualifiedNounSenses(
 
 function hasPhraseConnector(signId: string, signTokens: string[], lang: Lang): boolean {
   if (/_heures_/.test(signId)) return true
-  if (/_du_/.test(signId) || /_de_/.test(signId) || /_la_/.test(signId) || /_le_/.test(signId)) return true
+  if (/_d_/.test(signId) || /_du_/.test(signId) || /_de_/.test(signId) || /_la_/.test(signId) || /_le_/.test(signId)) return true
   if (/_des_/.test(signId) || /_au_/.test(signId) || /_aux_/.test(signId)) return true
   return signTokens.some((t) => isStopWord(t, lang))
+}
+
+/** Composé nominal + tag après virgule (ex. « Conseil d'administration, ça »). */
+function isCompoundPhraseWithTrailingCommaTag(
+  signId: string,
+  signTokens: string[],
+  label: string,
+  lang: Lang,
+): boolean {
+  if (lang !== 'fr' || !/[,;]/.test(label)) return false
+  if (!hasPhraseConnector(signId, signTokens, lang)) return false
+
+  const segments = label.split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+  if (segments.length !== 2) return false
+
+  const [beforeComma, afterComma] = segments
+  if (!beforeComma || !afterComma) return false
+  if (!/\b(d'|d |de |du |des )/i.test(beforeComma)) return false
+
+  const afterWords = afterComma.split(/\s+/).filter(Boolean)
+  if (afterWords.length !== 1) return false
+
+  const content = contentTokens(signTokens, lang, signId)
+  if (content.length < 2 || content.length > 3) return false
+
+  const headContent = content.slice(0, -1).map(normalizeToken)
+  if (headContent.length > 2) return false
+
+  const beforeNorm = new Set(labelContentWords(beforeComma, lang).map(normalizeToken))
+  if (!headContent.every((t) => beforeNorm.has(t))) return false
+
+  const lastContent = normalizeToken(content[content.length - 1]!)
+  const afterNorm = normalizeToken(afterWords[0]!)
+  return (
+    lastContent === afterNorm ||
+    lastContent.startsWith(afterNorm) ||
+    afterNorm.startsWith(lastContent)
+  )
 }
 
 function isTwoTokenPhrase(first: string, second: string, lang: Lang): boolean {
@@ -598,6 +670,109 @@ function verbStem(token: string): string {
 
 function hasVerbalPhrase(content: string[]): boolean {
   return content.slice(1).some((t) => FR_VERB_LIKE.has(verbStem(t)))
+}
+
+/** « À la poubelle jeter » → Poubelle · Jeter (pas une phrase figée). */
+function isPrepositionalVerbList(signId: string, content: string[], lang: Lang): boolean {
+  if (lang !== 'fr') return false
+  if (!/^a_la_/.test(signId)) return false
+  if (content.length < 2) return false
+  const last = content[content.length - 1]!
+  return FR_VERB_LIKE.has(verbStem(last)) || FR_VERB_LIKE.has(normalizeToken(last))
+}
+
+function extractPrepositionalVerbSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  const content = contentTokens(signTokens, lang, signId)
+  if (!isPrepositionalVerbList(signId, content, lang)) return null
+
+  const out: DictionarySense[] = []
+  const seen = new Set<string>()
+  const segments = label
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  for (const segment of segments) {
+    for (const raw of labelContentWords(segment.replace(/\s+\d+(?=\s|$)/g, ' '), lang)) {
+      const lemma = normalizeToken(raw)
+      if (seen.has(lemma)) continue
+      seen.add(lemma)
+      out.push({
+        word: capitalizeWord(raw),
+        lemma,
+        senseKey: `${lemma}@${signId}`,
+        signId,
+      })
+    }
+  }
+
+  return out.length > 0 ? out : null
+}
+
+function prepositionalFinPhrase(label: string): string {
+  const cleaned = label.trim().replace(/\s+\d+(?=\s|[,;]|$)/g, ' ')
+  const firstSegment = cleaned.split(/[,;]/)[0]!.trim()
+  const match = firstSegment.match(/^((?:à|a)\s+la\s+fin)\b/i)
+  if (match) return match[1]!
+  return firstSegment.replace(/\s+fin\s*$/i, '').trim() || firstSegment
+}
+
+/** « À la fin » / « À la fin, fin » — expression + éventuellement le nom seul. */
+function extractPrepositionalFinSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (lang !== 'fr' || !/^a_la_fin/.test(signId)) return null
+
+  const basePhrase = formatPhraseDisplay(prepositionalFinPhrase(label))
+  const senses: DictionarySense[] = [
+    {
+      word: basePhrase,
+      lemma: 'fin',
+      senseKey: `${normalizeToken(basePhrase)}@${signId}`,
+      signId,
+    },
+  ]
+
+  const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  const content = contentTokens(signTokens, lang, signId)
+  if (content.length >= 2) {
+    const last = content[content.length - 1]!
+    senses.push({
+      word: capitalizeWord(last),
+      lemma: normalizeToken(last),
+      senseKey: `${normalizeToken(last)}@${signId}`,
+      signId,
+    })
+  }
+
+  return senses
+}
+
+/** « Qu'y a-t-il, que se passe-t-il » → deux expressions distinctes. */
+function extractCommaQuestionPhrases(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (lang !== 'fr' || !/[,;]/.test(label)) return null
+
+  const segments = label
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (segments.length !== 2) return null
+
+  const isCliticQuestion = (segment: string) => /(?:a-t-il|t-il|t il)/i.test(segment)
+  if (!segments.every(isCliticQuestion)) return null
+
+  return segments.map((segment) => {
+    const trimmedSeg = segment.trim()
+    let display = formatPhraseDisplay(trimmedSeg)
+    if (/^qu['']y a-t-il$/i.test(trimmedSeg)) display = "Qu'y a-t-il"
+    if (/^que se passe-t-il$/i.test(trimmedSeg)) display = 'Que se passe-t-il'
+    const key = normalizeToken(display.replace(/[?'"]/g, ''))
+    return {
+      word: display,
+      lemma: lemmaFromDisplay(display, lang),
+      senseKey: `${key}@${signId}`,
+      signId,
+    }
+  })
 }
 
 /** Liste de synonymes sans virgule (ex. avenir futur plus tard prochain). */
@@ -635,12 +810,16 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   if (isNumericExpression(signId, trimmed)) return 'phrase'
   if (isReduplicatedCompound(signId)) return 'dedicated'
   if (content.length <= 1) return 'dedicated'
+  if (isPrepositionalVerbList(signId, content, lang)) return 'synonym_list'
   if (hasVerbalPhrase(content)) return 'phrase'
 
   // Lieu + pays ou suffixe catégorie (ville, fruit…) — via sign_id
   if (getHeadOnlyTail(content, signId, lang)) return 'qualified_noun'
 
-  if (/[,;]/.test(trimmed)) return 'synonym_list'
+  if (/[,;]/.test(trimmed)) {
+    if (isCompoundPhraseWithTrailingCommaTag(signId, signTokens, trimmed, lang)) return 'phrase'
+    return 'synonym_list'
+  }
 
   if (hasPhraseConnector(signId, signTokens, lang)) return 'phrase'
 
@@ -686,6 +865,9 @@ function qualifiedPhraseDisplay(label: string, lang: Lang): string {
 
 function phraseDisplay(signId: string, signTokens: string[], label: string, lang: Lang): string {
   let fromLabel = enrichNumericDisplay(signId, label.trim()).replace(/\s+/g, ' ')
+  if (isCompoundPhraseWithTrailingCommaTag(signId, signTokens, label, lang)) {
+    fromLabel = label.split(/[,;]/)[0]!.trim()
+  }
   const content = contentTokens(stripTrailingVariantSuffix(signTokens, signId), lang, signId)
   if (/[,;]/.test(fromLabel) && hasVerbalPhrase(content)) {
     fromLabel = fromLabel.split(/[,;]/)[0]!.trim()
@@ -725,6 +907,15 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   if (isSynonymParaphraseSign(signId, contentEarly, trimmed, lang)) {
     return extractSynonymParaphraseSenses(signId, trimmed, lang)
   }
+
+  const commaQuestions = extractCommaQuestionPhrases(signId, trimmed, lang)
+  if (commaQuestions) return filterDictionarySenses(commaQuestions, signId)
+
+  const finSenses = extractPrepositionalFinSenses(signId, trimmed, lang)
+  if (finSenses) return filterDictionarySenses(finSenses, signId)
+
+  const prepVerbSenses = extractPrepositionalVerbSenses(signId, trimmed, lang)
+  if (prepVerbSenses) return filterDictionarySenses(prepVerbSenses, signId)
 
   const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
   const structure = classifySignStructure(signId, trimmed, lang)
