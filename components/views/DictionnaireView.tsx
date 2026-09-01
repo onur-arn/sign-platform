@@ -4,6 +4,7 @@ import { useMemo, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { SIGN_LABELS_FR, SIGN_LABELS_EN, SIGN_LABELS_TR, SIGN_LABELS_PL } from '@/lib/signLabels'
+import { buildDictionaryEntries } from '@/lib/dictionaryEntries'
 import AvatarLoadingOverlay from '@/components/avatar/AvatarLoadingOverlay'
 
 function AvatarChunkFallback() {
@@ -37,6 +38,8 @@ export default function DictionnaireView() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<{ id: string; label: string; ts: number } | null>(null)
 
+  const dictionaryLang = language === 'en' ? 'en' : language === 'pl' ? 'pl' : language === 'tr' ? 'tr' : 'fr'
+
   const labelsMap = useMemo(() => {
     if (language === 'en') return SIGN_LABELS_EN
     if (language === 'pl') return SIGN_LABELS_PL
@@ -45,22 +48,17 @@ export default function DictionnaireView() {
   }, [language])
 
   const allSigns = useMemo(
-    () =>
-      Object.entries(labelsMap)
-        .map(([signId, label]) => ({ signId, label }))
-        .sort((a, b) =>
-          removeAccents(a.label).localeCompare(removeAccents(b.label), undefined, { sensitivity: 'base' }),
-        ),
-    [labelsMap],
+    () => buildDictionaryEntries(labelsMap, dictionaryLang),
+    [labelsMap, dictionaryLang],
   )
 
   const displayed = useMemo(() => {
     if (search.trim()) {
       const q = removeAccents(search.trim().toLowerCase())
-      return allSigns.filter((s) => removeAccents(s.label.toLowerCase()).includes(q))
+      return allSigns.filter((s) => s.normalized.includes(q) || removeAccents(s.word.toLowerCase()).includes(q))
     }
     if (activeLetter === 'ALL') return allSigns
-    return allSigns.filter((s) => firstLetter(s.label) === activeLetter)
+    return allSigns.filter((s) => firstLetter(s.word) === activeLetter)
   }, [allSigns, activeLetter, search])
 
   const handleLetter = useCallback((letter: string) => {
@@ -118,12 +116,12 @@ export default function DictionnaireView() {
           <div className="dict-grid max-h-[480px] overflow-y-auto pr-1">
             {displayed.slice(0, 400).map((s) => (
               <button
-                key={s.signId}
+                key={`${s.normalized}-${s.signId}`}
                 type="button"
-                className={`dict-chip ${selected?.id === s.signId ? 'active' : ''}`}
-                onClick={() => setSelected({ id: s.signId, label: s.label, ts: Date.now() })}
+                className={`dict-chip ${selected?.id === s.signId && selected?.label === s.word ? 'active' : ''}`}
+                onClick={() => setSelected({ id: s.signId, label: s.word, ts: Date.now() })}
               >
-                {s.label}
+                {s.word}
               </button>
             ))}
           </div>
@@ -132,7 +130,7 @@ export default function DictionnaireView() {
 
       <div className="panel">
         <h2 className="panel-title">
-          {selected ? (labelsMap[selected.id] ?? selected.label) : t.dashboard.result}
+          {selected ? selected.label : t.dashboard.result}
         </h2>
         {selected ? (
           <SignAvatarPlayer text="" ts={selected.ts} signId={selected.id} language={language} />
