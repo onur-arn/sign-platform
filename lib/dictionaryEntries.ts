@@ -108,6 +108,11 @@ export function buildDictionaryEntries(
   }
 
   const toRemove = new Set<string>()
+  const senseCountBySign = new Map<string, number>()
+
+  for (const [signId, label] of Object.entries(labelsMap)) {
+    senseCountBySign.set(signId, extractDictionarySenses(signId, label, lang).length)
+  }
 
   for (const [lemma, signIdSet] of signIdsByLemma) {
     const clusters = clusterSynonymSigns(lemma, [...signIdSet], lang, labelsMap)
@@ -118,6 +123,8 @@ export function buildDictionaryEntries(
       for (const entry of bySenseKey.values()) {
         if (entry.lemma !== lemma || !cluster.includes(entry.signId)) continue
         if (!isBareSynonymEntry(entry)) continue
+        // Garder tous les co-synonymes d'un même signe (ex. avenir/futur/plus tard/prochain)
+        if ((senseCountBySign.get(entry.signId) ?? 0) > 1) continue
         if (entry.signId !== chosen && areSynonymSigns(entry.signId, chosen, lemma, lang, labelsMap)) {
           toRemove.add(entry.senseKey)
         }
