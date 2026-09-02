@@ -49,42 +49,237 @@ const FR_COUNTRIES = new Set([
   'palestine', 'lettonie',
 ])
 
-/** Pays / régions multi-mots : une seule entrée dictionnaire (jamais « Sud » seul, etc.). */
-const FR_COMPOUND_PLACE_SEQUENCES: { tokens: string[]; display: string }[] = [
-  { tokens: ['afrique', 'du', 'sud'], display: 'Afrique du Sud' },
-  { tokens: ['amerique', 'du', 'sud'], display: 'Amerique du Sud' },
-  { tokens: ['amerique', 'du', 'nord'], display: 'Amerique du Nord' },
-  { tokens: ['coree', 'du', 'sud'], display: 'Coree du Sud' },
-  { tokens: ['coree', 'du', 'nord'], display: 'Coree du Nord' },
-  { tokens: ['irlande', 'du', 'nord'], display: 'Irlande du Nord' },
-  { tokens: ['arabie', 'saoudite'], display: 'Arabie saoudite' },
-  { tokens: ['bosnie', 'herzegovine'], display: 'Bosnie-Herzegovine' },
-  { tokens: ['costa', 'rica'], display: 'Costa Rica' },
-  { tokens: ['porto', 'rico'], display: 'Porto Rico' },
-  { tokens: ['sri', 'lanka'], display: 'Sri Lanka' },
-  { tokens: ['el', 'salvador'], display: 'El Salvador' },
-  { tokens: ['cap', 'vert'], display: 'Cap vert' },
-  { tokens: ['cote', 'd', 'rsquo', 'ivoire'], display: "Cote d'ivoire" },
-  { tokens: ['cote', 'd', 'ivoire'], display: "Cote d'ivoire" },
-  { tokens: ['royaume', 'uni'], display: 'Royaume uni' },
-  { tokens: ['pays', 'bas'], display: 'Pays bas' },
-  { tokens: ['emirats', 'arabes', 'unis'], display: 'Emirats arabes unis' },
-  { tokens: ['etats', 'unis'], display: 'Etats-Unis' },
-  { tokens: ['nouvelle', 'zelande'], display: 'Nouvelle Zelande' },
-  { tokens: ['viet', 'nam'], display: 'Viet nam' },
-  { tokens: ['burkina', 'faso'], display: 'Burkina Faso' },
-  { tokens: ['birmanie', 'myanmar'], display: 'Birmanie Myanmar' },
-  { tokens: ['hemisphere', 'sud'], display: 'Hemisphere sud' },
-  { tokens: ['hemisphere', 'nord'], display: 'Hemisphere nord' },
+/** Pays / régions multi-mots : une seule entrée, libellés sémantiques par langue. */
+const FR_COMPOUND_PLACE_SEQUENCES: { tokens: string[]; display: Record<Lang, string> }[] = [
+  { tokens: ['afrique', 'du', 'sud'], display: { fr: 'Afrique du Sud', en: 'South Africa', tr: 'Güney Afrika', pl: 'Afryka Południowa' } },
+  { tokens: ['amerique', 'du', 'sud'], display: { fr: 'Amerique du Sud', en: 'South America', tr: 'Güney Amerika', pl: 'Ameryka Południowa' } },
+  { tokens: ['amerique', 'du', 'nord'], display: { fr: 'Amerique du Nord', en: 'North America', tr: 'Kuzey Amerika', pl: 'Ameryka Północna' } },
+  { tokens: ['coree', 'du', 'sud'], display: { fr: 'Coree du Sud', en: 'South Korea', tr: 'Güney Kore', pl: 'Korea Południowa' } },
+  { tokens: ['coree', 'du', 'nord'], display: { fr: 'Coree du Nord', en: 'North Korea', tr: 'Kuzey Kore', pl: 'Korea Północna' } },
+  { tokens: ['irlande', 'du', 'nord'], display: { fr: 'Irlande du Nord', en: 'Northern Ireland', tr: 'Kuzey İrlanda', pl: 'Irlandia Północna' } },
+  { tokens: ['arabie', 'saoudite'], display: { fr: 'Arabie saoudite', en: 'Saudi Arabia', tr: 'Suudi Arabistan', pl: 'Arabia Saudyjska' } },
+  { tokens: ['bosnie', 'herzegovine'], display: { fr: 'Bosnie-Herzegovine', en: 'Bosnia and Herzegovina', tr: 'Bosna-Hersek', pl: 'Bośnia i Hercegowina' } },
+  { tokens: ['costa', 'rica'], display: { fr: 'Costa Rica', en: 'Costa Rica', tr: 'Kosta Rika', pl: 'Kostaryka' } },
+  { tokens: ['porto', 'rico'], display: { fr: 'Porto Rico', en: 'Puerto Rico', tr: 'Porto Riko', pl: 'Portoryko' } },
+  { tokens: ['sri', 'lanka'], display: { fr: 'Sri Lanka', en: 'Sri Lanka', tr: 'Sri Lanka', pl: 'Sri Lanka' } },
+  { tokens: ['el', 'salvador'], display: { fr: 'El Salvador', en: 'El Salvador', tr: 'El Salvador', pl: 'Salwador' } },
+  { tokens: ['cap', 'vert'], display: { fr: 'Cap vert', en: 'Cape Verde', tr: 'Yeşil Burun Adaları', pl: 'Republika Zielonego Przylądka' } },
+  { tokens: ['cote', 'd', 'rsquo', 'ivoire'], display: { fr: "Cote d'ivoire", en: 'Ivory Coast', tr: 'Fildişi Sahili', pl: 'Wybrzeże Kości Słoniowej' } },
+  { tokens: ['cote', 'd', 'ivoire'], display: { fr: "Cote d'ivoire", en: 'Ivory Coast', tr: 'Fildişi Sahili', pl: 'Wybrzeże Kości Słoniowej' } },
+  { tokens: ['royaume', 'uni'], display: { fr: 'Royaume uni', en: 'United Kingdom', tr: 'Birleşik Krallık', pl: 'Zjednoczone Królestwo' } },
+  { tokens: ['pays', 'bas'], display: { fr: 'Pays bas', en: 'Netherlands', tr: 'Hollanda', pl: 'Holandia' } },
+  { tokens: ['emirats', 'arabes', 'unis'], display: { fr: 'Emirats arabes unis', en: 'United Arab Emirates', tr: 'Birleşik Arap Emirlikleri', pl: 'Zjednoczone Emiraty Arabskie' } },
+  { tokens: ['etats', 'unis'], display: { fr: 'Etats-Unis', en: 'United States', tr: 'Amerika Birleşik Devletleri', pl: 'Stany Zjednoczone' } },
+  { tokens: ['nouvelle', 'zelande'], display: { fr: 'Nouvelle Zelande', en: 'New Zealand', tr: 'Yeni Zelanda', pl: 'Nowa Zelandia' } },
+  { tokens: ['viet', 'nam'], display: { fr: 'Viet nam', en: 'Vietnam', tr: 'Vietnam', pl: 'Wietnam' } },
+  { tokens: ['burkina', 'faso'], display: { fr: 'Burkina Faso', en: 'Burkina Faso', tr: 'Burkina Faso', pl: 'Burkina Faso' } },
+  { tokens: ['birmanie', 'myanmar'], display: { fr: 'Birmanie', en: 'Myanmar', tr: 'Myanmar', pl: 'Mjanma' } },
+  { tokens: ['hemisphere', 'sud'], display: { fr: 'Hemisphere sud', en: 'Southern Hemisphere', tr: 'Güney Yarımküre', pl: 'Półkula południowa' } },
+  { tokens: ['hemisphere', 'nord'], display: { fr: 'Hemisphere nord', en: 'Northern Hemisphere', tr: 'Kuzey Yarımküre', pl: 'Półkula północna' } },
 ]
 
-function matchCompoundPlaceParts(parts: string[]): { display: string } | null {
+function matchCompoundPlaceParts(parts: string[], lang: Lang = 'fr'): { display: string } | null {
   const norm = parts.map(normalizeToken)
   for (const place of FR_COMPOUND_PLACE_SEQUENCES) {
     if (norm.length !== place.tokens.length) continue
-    if (place.tokens.every((t, i) => t === norm[i])) return { display: place.display }
+    if (place.tokens.every((t, i) => t === norm[i])) {
+      return { display: place.display[lang] ?? place.display.fr }
+    }
   }
   return null
+}
+
+/** Entrées figées : sens équivalent par langue (pas de calque mot-à-mot). */
+const SEMANTIC_SINGLE_BY_BASE: Record<string, Record<Lang, string>> = {
+  plutot_mourir_que: {
+    fr: 'Plutot mourir que',
+    en: 'Rather die than',
+    tr: 'Ölmektense',
+    pl: 'Raczej umrzeć niż',
+  },
+  quand_meme: {
+    fr: 'Quand meme',
+    en: 'Anyway',
+    tr: 'Yine de',
+    pl: 'Tak czy inaczej',
+  },
+  la_bas: {
+    fr: 'La bas',
+    en: 'Over there',
+    tr: 'Orada',
+    pl: 'Tam',
+  },
+  fer_a_cheval_de_trait: {
+    fr: 'Fer à cheval',
+    en: 'Horseshoe',
+    tr: 'Nal',
+    pl: 'Podkowa',
+  },
+  fils_de_pute: {
+    fr: 'Fils de pute',
+    en: 'Son of a bitch',
+    tr: 'Orospu çocuğu',
+    pl: 'Sukinsyn',
+  },
+  koh_lanta: {
+    fr: 'Koh Lanta',
+    en: 'Koh Lanta',
+    tr: 'Koh-Lanta',
+    pl: 'Koh Lanta',
+  },
+  wi_fi: { fr: 'Wifi', en: 'Wifi', tr: 'Wifi', pl: 'Wifi' },
+  t_shirt: { fr: 'T-shirt', en: 'T-shirt', tr: 'T-shirt', pl: 'T-shirt' },
+  post_it: { fr: 'Post-it', en: 'Post-it', tr: 'Post-it', pl: 'Post-it' },
+  s_rsquo_il_vous_plait_svp: {
+    fr: "S'il vous plaît",
+    en: 'Please',
+    tr: 'Lütfen',
+    pl: 'Proszę',
+  },
+}
+
+/** Temps grammaticaux — termes linguistiques, pas la glose machine. */
+const GRAMMAR_TENSE_BY_LANG: Record<string, Record<Lang, string>> = {
+  plus_que_parfait: {
+    fr: 'Plus-que-parfait',
+    en: 'Pluperfect',
+    tr: 'Mişli geçmiş',
+    pl: 'Czas zaprzeszły',
+  },
+  futur_simple: {
+    fr: 'Futur simple',
+    en: 'Simple future',
+    tr: 'Gelecek zaman (basit)',
+    pl: 'Czas przyszły prosty',
+  },
+  futur_anterieur: {
+    fr: 'Futur antérieur',
+    en: 'Future perfect',
+    tr: 'Gelecek zamanın hikâyesi',
+    pl: 'Czas przyszły uprzedni',
+  },
+  passe_compose: {
+    fr: 'Passé composé',
+    en: 'Compound past',
+    tr: 'Geçmiş zaman (yakın)',
+    pl: 'Czas przeszły złożony',
+  },
+  passe_simple: {
+    fr: 'Passé simple',
+    en: 'Simple past (literary)',
+    tr: 'Belirli geçmiş',
+    pl: 'Czas przeszły prosty',
+  },
+  passe_anterieur: {
+    fr: 'Passé antérieur',
+    en: 'Past anterior',
+    tr: 'Mişli geçmişin hikâyesi',
+    pl: 'Czas przeszły uprzedni',
+  },
+  imparfait: {
+    fr: 'Imparfait',
+    en: 'Imperfect',
+    tr: 'Şimdiki zamanın hikâyesi',
+    pl: 'Czas przeszły niedokonany',
+  },
+}
+
+/**
+ * Listes de synonymes / co-sens : équivalents sémantiques par langue.
+ * (évite les calques du type « Date of that when when conjunction »)
+ */
+const SEMANTIC_SYNONYM_LISTS: Record<string, Record<Lang, string[]>> = {
+  date_des_que_lorsque_quand_conjonction: {
+    fr: ['Dès que', 'Lorsque', 'Quand'],
+    en: ['As soon as', 'When', 'Whenever'],
+    tr: ['Olur olmaz', 'İken', 'Ne zaman'],
+    pl: ['Jak tylko', 'Gdy', 'Kiedy'],
+  },
+  ne_pas_aimer_detester_3: {
+    fr: ['Ne pas aimer', 'Detester'],
+    en: ['Dislike', 'Hate'],
+    tr: ['Sevmemek', 'Nefret etmek'],
+    pl: ['Nie lubić', 'Nienawidzić'],
+  },
+  ne_pas_avoir_peur: {
+    fr: ['Ne pas avoir peur'],
+    en: ['Not be afraid'],
+    tr: ['Korkmamak'],
+    pl: ['Nie bać się'],
+  },
+  ne_pas_avoir_peur_1_trop_facile: {
+    fr: ['Ne pas avoir peur'],
+    en: ['Not be afraid'],
+    tr: ['Korkmamak'],
+    pl: ['Nie bać się'],
+  },
+  ne_pas_comprendre_tout: {
+    fr: ['Ne pas comprendre tout'],
+    en: ['Not understand everything'],
+    tr: ['Her şeyi anlamamak'],
+    pl: ['Nie rozumieć wszystkiego'],
+  },
+  ne_pas_etre_capable_de_faire: {
+    fr: ['Ne pas etre capable de faire'],
+    en: ['Be unable to do'],
+    tr: ['Yapamamak'],
+    pl: ['Nie potrafić'],
+  },
+  ne_pas_finir_pas_encore: {
+    fr: ['Ne pas finir', 'Pas encore'],
+    en: ['Not finish', 'Not yet'],
+    tr: ['Bitirmemek', 'Henüz değil'],
+    pl: ['Nie kończyć', 'Jeszcze nie'],
+  },
+  ignorer_ne_pas_savoir: {
+    fr: ['Ignorer', 'Ne pas savoir'],
+    en: ['Ignore', 'Not know'],
+    tr: ['Görmezden gelmek', 'Bilmemek'],
+    pl: ['Ignorować', 'Nie wiedzieć'],
+  },
+  aile_s_rsquo_envoler_voler_oiseau: {
+    fr: ['Aile', "S'envoler", 'Voler', 'Oiseau'],
+    en: ['Wing', 'Take off', 'Fly', 'Bird'],
+    tr: ['Kanat', 'Havalanmak', 'Uçmak', 'Kuş'],
+    pl: ['Skrzydło', 'Odlatywać', 'Latać', 'Ptak'],
+  },
+  chaise_s_rsquo_asseoir: {
+    fr: ['Chaise', "S'asseoir"],
+    en: ['Chair', 'Sit down'],
+    tr: ['Sandalye', 'Oturmak'],
+    pl: ['Krzesło', 'Siadać'],
+  },
+  bagarre_se_battre: {
+    fr: ['Bagarre', 'Se battre'],
+    en: ['Brawl', 'Fight'],
+    tr: ['Kavga', 'Dövüşmek'],
+    pl: ['Bójka', 'Bić się'],
+  },
+  balader_se_promener: {
+    fr: ['Balader', 'Se promener'],
+    en: ['Stroll', 'Walk'],
+    tr: ['Gezinmek', 'Yürümek'],
+    pl: ['Przechadzać się', 'Spacerować'],
+  },
+}
+
+function sensesFromWords(signId: string, words: string[]): DictionarySense[] {
+  return words.map((word) => {
+    const lemma = normalizeToken(word)
+    return { word, lemma, senseKey: `${lemma}@${signId}`, signId }
+  })
+}
+
+function extractSemanticSynonymListSenses(
+  signId: string,
+  lang: Lang,
+): DictionarySense[] | null {
+  const base = signId.replace(/_\d+$/, '')
+  const byLang = SEMANTIC_SYNONYM_LISTS[signId] ?? SEMANTIC_SYNONYM_LISTS[base]
+  if (!byLang) return null
+  const words = byLang[lang] ?? byLang.fr
+  if (!words || words.length === 0) return null
+  return sensesFromWords(signId, words)
 }
 
 /** Suffixes pays multi-mots en fin de sign_id (du plus long au plus court). */
@@ -1949,89 +2144,36 @@ function extractFlatSynonymListSenses(signId: string, label: string, lang: Lang)
   return senses.length >= 2 ? senses : null
 }
 
-/** Temps verbaux étiquetés « …, temps de l'indicatif ». */
-const FR_GRAMMAR_TENSE_DISPLAY: Record<string, string> = {
-  plus_que_parfait: 'Plus-que-parfait',
-  futur_simple: 'Futur simple',
-  futur_anterieur: 'Futur antérieur',
-  passe_compose: 'Passé composé',
-  passe_simple: 'Passé simple',
-  passe_anterieur: 'Passé antérieur',
-  imparfait: 'Imparfait',
-}
-
 function extractDedicatedCompoundSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
   const base = signId.replace(/_\d+$/, '')
-  const trimmed = label.trim()
 
-  // Pays / régions multi-mots — toutes langues (sign_id FR), libellé local si dispo
-  const place = matchCompoundPlaceParts(base.split('_').filter(Boolean))
+  const place = matchCompoundPlaceParts(base.split('_').filter(Boolean), lang)
   if (place) {
-    const display =
-      lang === 'fr' || !trimmed || /[,;]/.test(trimmed)
-        ? place.display
-        : formatPhraseDisplay(trimmed)
+    const lemma = normalizeToken(place.display)
+    return [{ word: place.display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+  }
+
+  const single = SEMANTIC_SINGLE_BY_BASE[base]
+  if (single) {
+    const display = single[lang] ?? single.fr
     const lemma = normalizeToken(display)
     return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
 
-  // Composés figés internationaux (wifi, t-shirt…)
-  if (base === 'wi_fi') {
-    return [{ word: 'Wifi', lemma: 'wifi', senseKey: `wifi@${signId}`, signId }]
-  }
-  if (base === 't_shirt') {
-    return [{ word: 'T-shirt', lemma: 't-shirt', senseKey: `t-shirt@${signId}`, signId }]
-  }
-  if (base === 'post_it') {
-    return [{ word: 'Post-it', lemma: 'post-it', senseKey: `post-it@${signId}`, signId }]
-  }
-  if (base === 'koh_lanta') {
-    const display = trimmed && !/[,;]/.test(trimmed) ? formatPhraseDisplay(trimmed) : 'Koh Lanta'
-    const lemma = normalizeToken(display)
-    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
-  }
-  if (base === 'fils_de_pute') {
-    const display =
-      lang === 'fr' || !trimmed
-        ? 'Fils de pute'
-        : formatPhraseDisplay(trimmed)
+  if (/^s_rsquo_il_vous_plait/.test(base)) {
+    const display = SEMANTIC_SINGLE_BY_BASE.s_rsquo_il_vous_plait_svp![lang] ?? "S'il vous plaît"
     const lemma = normalizeToken(display)
     return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
 
-  if (lang !== 'fr') return null
-
-  if (base === 'la_bas') {
-    return [{ word: 'La bas', lemma: 'la bas', senseKey: `la bas@${signId}`, signId }]
-  }
-  if (base === 'fer_a_cheval_de_trait') {
-    return [{ word: 'Fer à cheval', lemma: 'fer a cheval', senseKey: `fer a cheval@${signId}`, signId }]
-  }
-
-  if (base === 'plutot_mourir_que') {
-    return [{
-      word: 'Plutot mourir que',
-      lemma: 'plutot mourir que',
-      senseKey: `plutot mourir que@${signId}`,
-      signId,
-    }]
-  }
-  if (base === 'quand_meme') {
-    return [{
-      word: 'Quand meme',
-      lemma: 'quand meme',
-      senseKey: `quand meme@${signId}`,
-      signId,
-    }]
-  }
   if (signId.endsWith('_temps_de_l_indicatif')) {
     const tenseId = signId.slice(0, -'_temps_de_l_indicatif'.length)
-    const display =
-      FR_GRAMMAR_TENSE_DISPLAY[tenseId] ??
-      formatPhraseDisplay(tenseId.replace(/_/g, ' '))
+    const byLang = GRAMMAR_TENSE_BY_LANG[tenseId]
+    const display = byLang?.[lang] ?? byLang?.fr ?? formatPhraseDisplay(tenseId.replace(/_/g, ' '))
     const lemma = normalizeToken(display)
     return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
+
   return null
 }
 
@@ -3119,6 +3261,9 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
 
   const dedicatedCompound = extractDedicatedCompoundSenses(signId, trimmed, lang)
   if (dedicatedCompound) return filterDictionarySenses(dedicatedCompound, signId)
+
+  const semanticList = extractSemanticSynonymListSenses(signId, lang)
+  if (semanticList) return filterDictionarySenses(semanticList, signId)
 
   const deauCompound = extractDeauCompoundSenses(signId, trimmed, lang)
   if (deauCompound) return filterDictionarySenses(deauCompound, signId)
