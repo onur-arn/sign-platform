@@ -10,6 +10,7 @@ export type DictionaryEntry = {
 }
 
 import { DICTIONARY_PREFERRED_SIGN } from './dictionaryPreferences'
+import { DISABLED_SIGNS } from './disabledSigns'
 import {
   areSynonymSigns,
   clusterSynonymSigns,
@@ -93,6 +94,7 @@ export function buildDictionaryEntries(
   const signIdsByLemma = new Map<string, Set<string>>()
 
   for (const [signId, label] of Object.entries(labelsMap)) {
+    if (DISABLED_SIGNS.has(signId)) continue
     for (const sense of extractDictionarySenses(signId, label, lang)) {
       bySenseKey.set(sense.senseKey, {
         word: sense.word,

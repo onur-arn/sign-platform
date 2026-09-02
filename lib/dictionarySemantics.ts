@@ -49,6 +49,44 @@ const FR_COUNTRIES = new Set([
   'palestine', 'lettonie',
 ])
 
+/** Pays / régions multi-mots : une seule entrée dictionnaire (jamais « Sud » seul, etc.). */
+const FR_COMPOUND_PLACE_SEQUENCES: { tokens: string[]; display: string }[] = [
+  { tokens: ['afrique', 'du', 'sud'], display: 'Afrique du Sud' },
+  { tokens: ['amerique', 'du', 'sud'], display: 'Amerique du Sud' },
+  { tokens: ['amerique', 'du', 'nord'], display: 'Amerique du Nord' },
+  { tokens: ['coree', 'du', 'sud'], display: 'Coree du Sud' },
+  { tokens: ['coree', 'du', 'nord'], display: 'Coree du Nord' },
+  { tokens: ['irlande', 'du', 'nord'], display: 'Irlande du Nord' },
+  { tokens: ['arabie', 'saoudite'], display: 'Arabie saoudite' },
+  { tokens: ['bosnie', 'herzegovine'], display: 'Bosnie-Herzegovine' },
+  { tokens: ['costa', 'rica'], display: 'Costa Rica' },
+  { tokens: ['porto', 'rico'], display: 'Porto Rico' },
+  { tokens: ['sri', 'lanka'], display: 'Sri Lanka' },
+  { tokens: ['el', 'salvador'], display: 'El Salvador' },
+  { tokens: ['cap', 'vert'], display: 'Cap vert' },
+  { tokens: ['cote', 'd', 'rsquo', 'ivoire'], display: "Cote d'ivoire" },
+  { tokens: ['cote', 'd', 'ivoire'], display: "Cote d'ivoire" },
+  { tokens: ['royaume', 'uni'], display: 'Royaume uni' },
+  { tokens: ['pays', 'bas'], display: 'Pays bas' },
+  { tokens: ['emirats', 'arabes', 'unis'], display: 'Emirats arabes unis' },
+  { tokens: ['etats', 'unis'], display: 'Etats-Unis' },
+  { tokens: ['nouvelle', 'zelande'], display: 'Nouvelle Zelande' },
+  { tokens: ['viet', 'nam'], display: 'Viet nam' },
+  { tokens: ['burkina', 'faso'], display: 'Burkina Faso' },
+  { tokens: ['birmanie', 'myanmar'], display: 'Birmanie Myanmar' },
+  { tokens: ['hemisphere', 'sud'], display: 'Hemisphere sud' },
+  { tokens: ['hemisphere', 'nord'], display: 'Hemisphere nord' },
+]
+
+function matchCompoundPlaceParts(parts: string[]): { display: string } | null {
+  const norm = parts.map(normalizeToken)
+  for (const place of FR_COMPOUND_PLACE_SEQUENCES) {
+    if (norm.length !== place.tokens.length) continue
+    if (place.tokens.every((t, i) => t === norm[i])) return { display: place.display }
+  }
+  return null
+}
+
 /** Suffixes pays multi-mots en fin de sign_id (du plus long au plus court). */
 const GEO_MULTI_COUNTRY_TAILS: string[][] = [
   ['emirats', 'arabes', 'unis'],
@@ -62,6 +100,15 @@ const GEO_MULTI_COUNTRY_TAILS: string[][] = [
   ['viet', 'nam'],
   ['burkina', 'faso'],
   ['birmanie', 'myanmar'],
+  ['afrique', 'du', 'sud'],
+  ['amerique', 'du', 'sud'],
+  ['amerique', 'du', 'nord'],
+  ['coree', 'du', 'sud'],
+  ['coree', 'du', 'nord'],
+  ['irlande', 'du', 'nord'],
+  ['nouvelle', 'zelande'],
+  ['el', 'salvador'],
+  ['cap', 'vert'],
 ]
 
 const FR_RELATIONAL_BEFORE_COUNTRY = new Set(['de', 'du', 'des', 'd'])
@@ -77,6 +124,26 @@ const FR_MERGED_PHRASES: [string, string][] = [
   ['croque', 'monsieur'],
   ['croque', 'madame'],
   ['mini', 'foot'],
+  ['quand', 'meme'],
+  ['des', 'que'],
+  ['wi', 'fi'],
+  ['t', 'shirt'],
+  ['post', 'it'],
+  ['koh', 'lanta'],
+  ['costa', 'rica'],
+  ['porto', 'rico'],
+  ['sri', 'lanka'],
+  ['el', 'salvador'],
+  ['cap', 'vert'],
+  ['royaume', 'uni'],
+  ['pays', 'bas'],
+  ['nouvelle', 'zelande'],
+  ['viet', 'nam'],
+  ['burkina', 'faso'],
+  ['arabie', 'saoudite'],
+  ['bosnie', 'herzegovine'],
+  ['hemisphere', 'sud'],
+  ['hemisphere', 'nord'],
 ]
 
 /** Groupes figés dans les listes de synonymes (sign_id → un segment chacun). */
@@ -84,6 +151,20 @@ const FR_SYNONYM_GROUP_SEQUENCES: string[][] = [
   ['ne', 'pas', 'faire', 'savoir'],
   ['ne', 'pas', 'voir', 'directement'],
   ['ne', 'pas', 'montrer'],
+  ['ne', 'pas'],
+  ['n', 'rsquo', 'importe'],
+  ['n', 'rsquo', 'est'],
+  ['n', 'rsquo', 'en'],
+  ['n', 'en'],
+  ['s', 'rsquo', 'il', 'vous', 'plait'],
+  ['s', 'rsquo', 'envoler'],
+  ['s', 'rsquo', 'asseoir'],
+  ['s', 'rsquo', 'efforcer'],
+  ['s', 'rsquo', 'appeler'],
+  ['s', 'rsquo', 'entailler'],
+  ['s', 'rsquo', 'evanouir'],
+  ['koh', 'lanta'],
+  ['fils', 'de', 'pute'],
   ['va', 'te', 'faire', 'foutre'],
   ['travailleuse', 'du', 'sexe'],
   ['il', 'n', 'rsquo', 'y', 'a', 'pas'],
@@ -155,6 +236,15 @@ const FR_SYNONYM_GROUP_SEQUENCES: string[][] = [
   ['rien', 'a', 'faire'],
   ['mettre', 'a', 'jour'],
   ['mise', 'a', 'jour'],
+  ['plutot', 'mourir', 'que'],
+  ['plus', 'que', 'parfait'],
+  ['futur', 'simple'],
+  ['futur', 'anterieur'],
+  ['passe', 'compose'],
+  ['passe', 'simple'],
+  ['passe', 'anterieur'],
+  ['des', 'que'],
+  ['quand', 'meme'],
 ]
 
 /** Adjectifs de taille — tête générique avant une variante « en largeur/hauteur… ». */
@@ -383,6 +473,24 @@ function mergeMultiWordPhrases(tokens: string[]): string[] {
       i += 2
       continue
     }
+    if (
+      n0 === 'plutot' &&
+      normalizeToken(merged[i + 1] ?? '') === 'mourir' &&
+      normalizeToken(merged[i + 2] ?? '') === 'que'
+    ) {
+      out.push([merged[i], merged[i + 1], merged[i + 2]].join(' '))
+      i += 2
+      continue
+    }
+    if (
+      n0 === 'plus' &&
+      normalizeToken(merged[i + 1] ?? '') === 'que' &&
+      normalizeToken(merged[i + 2] ?? '') === 'parfait'
+    ) {
+      out.push([merged[i], merged[i + 1], merged[i + 2]].join(' '))
+      i += 2
+      continue
+    }
     out.push(merged[i]!)
   }
   return out
@@ -524,8 +632,20 @@ function isDictionaryNoiseDigit(word: string, signId: string): boolean {
   return isSignVariantDigit(w, signId)
 }
 
+/** Particules inutiles seules (« N », « Ne », « S », « Se ») — pas des entrées dictionnaire. */
+function isBareCliticParticle(word: string): boolean {
+  const n = normalizeToken(word)
+  if (n === 'n' || n === 'ne' || n === 's' || n === 'se') return true
+  // fragments réfléchis incomplets
+  if (n === "s'est" || n === 's est') return true
+  if (/^s['']envoyer en$/.test(n)) return true
+  // lettre isolée issue d'un composé (T de t-shirt, G de gramme g…) — pas le signe alphabet dédié
+  if (/^[a-z]$/.test(n)) return true
+  return false
+}
+
 function filterDictionarySenses(senses: DictionarySense[], signId: string): DictionarySense[] {
-  return senses.filter((s) => !isDictionaryNoiseDigit(s.word, signId))
+  return senses.filter((s) => !isDictionaryNoiseDigit(s.word, signId) && !isBareCliticParticle(s.word))
 }
 
 function stripTrailingVariantSuffix(tokens: string[], signId: string): string[] {
@@ -736,8 +856,10 @@ function lemmaFromDisplay(display: string, lang: Lang): string {
   return normalizeToken(display)
 }
 
-/** Noms courants finissant en -ois/-ais confondus avec des adjectifs (ex. mois ≠ moisissure). */
-const FR_NOUN_NOT_ADJECTIVE = new Set(['mois', 'fois', 'pays', 'bois', 'poids', 'repas', 'coque'])
+/** Noms courants finissant en -ois/-ais/-ue confondus avec des adjectifs (ex. mois ≠ moisissure). */
+const FR_NOUN_NOT_ADJECTIVE = new Set([
+  'mois', 'fois', 'pays', 'bois', 'poids', 'repas', 'coque', 'lorsque',
+])
 
 const FR_COLOR_ADJECTIVES = new Set([
   'rouge', 'jaune', 'blanc', 'noir', 'vert', 'bleu', 'gris', 'rose', 'brun', 'violet', 'orange',
@@ -849,6 +971,43 @@ function mergedSegmentDisplay(seq: string[]): string {
   if (norm[0] === 'c' && norm[1] === 'est' && norm[2] === 'a' && norm[3] === 'dire' && norm[4] === 'que') {
     return "c'est-a-dire que"
   }
+  if (norm[0] === 'plutot' && norm[1] === 'mourir' && norm[2] === 'que') {
+    return 'plutot mourir que'
+  }
+  if (norm[0] === 'plus' && norm[1] === 'que' && norm[2] === 'parfait') {
+    return 'plus-que-parfait'
+  }
+  if (norm[0] === 'des' && norm[1] === 'que') {
+    return 'des que'
+  }
+  if (norm[0] === 'quand' && norm[1] === 'meme') {
+    return 'quand meme'
+  }
+  if (norm[0] === 'ne' && norm[1] === 'pas') {
+    const rest = seq.slice(2)
+    return rest.length ? `ne pas ${rest.map(decodeSignToken).join(' ')}` : 'ne pas'
+  }
+  if (norm[0] === 'n' && norm[1] === 'rsquo' && norm[2] === 'importe') {
+    return "n'importe"
+  }
+  if (norm[0] === 'n' && norm[1] === 'rsquo' && norm[2] === 'est') {
+    return "n'est"
+  }
+  if (norm[0] === 'n' && norm[1] === 'rsquo' && norm[2] === 'en') {
+    return "n'en"
+  }
+  if (norm[0] === 'n' && norm[1] === 'en') {
+    return "n'en"
+  }
+  if (norm[0] === 's' && norm[1] === 'rsquo' && norm[2] === 'il' && norm[3] === 'vous' && norm[4] === 'plait') {
+    return "s'il vous plait"
+  }
+  if (norm[0] === 's' && norm[1] === 'rsquo' && norm[2]) {
+    return `s'${decodeSignToken(seq[2]!)}`
+  }
+  if (norm[0] === 's' && norm[1] && norm[1] !== 'rsquo' && norm[1] !== 'y' && norm[1] !== 'en') {
+    return `s'${decodeSignToken(seq[1]!)}`
+  }
   if (norm[0] === 'c' && norm[1] === 'est') {
     return "c'est"
   }
@@ -907,6 +1066,8 @@ function mergedSegmentDisplay(seq: string[]): string {
 
 const FR_ARTICLE_TOKENS = new Set([
   'un', 'une', 'le', 'la', 'les', 'du', 'des', 'de', 'd', 'l', 'a', 'rsquo', 'c', 'ca', 'ce', 'cet', 'cette', 'y',
+  // Négation / élision / pronom réfléchi — jamais des boutons isolés (« N », « Ne », « S », « Se »)
+  'n', 'ne', 's', 'se',
 ])
 
 /** Unités de durée — jamais des entrées isolées hors signes dédiés (mois_1, an_1…). */
@@ -954,6 +1115,99 @@ function mergeArticleBoundParts(parts: string[]): string[] {
     const n1 = normalizeToken(parts[i + 1] ?? '')
     const n2 = normalizeToken(parts[i + 2] ?? '')
     const n3 = normalizeToken(parts[i + 3] ?? '')
+
+    // s' + verbe / expression (s'envoler, s'asseoir, s'il vous plaît…)
+    if (n === 's' && n1 === 'rsquo' && isArticlePhraseContentToken(parts[i + 2] ?? '')) {
+      const head = decodeSignToken(parts[i + 2]!)
+      if (
+        normalizeToken(head) === 'il' &&
+        normalizeToken(parts[i + 3] ?? '') === 'vous' &&
+        normalizeToken(parts[i + 4] ?? '') === 'plait'
+      ) {
+        out.push("s'il vous plait")
+        i += 5
+        continue
+      }
+      // s'envoyer en l'air
+      if (
+        normalizeToken(head) === 'envoyer' &&
+        normalizeToken(parts[i + 3] ?? '') === 'en'
+      ) {
+        let end = i + 3
+        const chunk = ["s'envoyer", 'en']
+        if (normalizeToken(parts[end + 1] ?? '') === 'l' && normalizeToken(parts[end + 2] ?? '') === 'rsquo') {
+          end += 2
+          chunk.push("l'")
+          if (parts[end + 1]) {
+            end++
+            chunk.push(decodeSignToken(parts[end]!))
+          }
+        } else if (normalizeToken(parts[end + 1] ?? '') === 'l' && isArticlePhraseContentToken(parts[end + 2] ?? '')) {
+          end += 2
+          chunk.push(`l'${decodeSignToken(parts[end]!)}`)
+        } else if (isArticlePhraseContentToken(parts[end + 1] ?? '')) {
+          end++
+          chunk.push(decodeSignToken(parts[end]!))
+        }
+        out.push(chunk.join(' ').replace(/l' /g, "l'"))
+        i = end + 1
+        continue
+      }
+      out.push(`s'${head}`)
+      i += 3
+      continue
+    }
+    if (n === 's' && isArticlePhraseContentToken(parts[i + 1] ?? '') && n1 !== 'rsquo' && n1 !== 'y' && n1 !== 'en') {
+      // ça s'est …
+      if (n1 === 'est') {
+        let end = i + 1
+        const chunk = ["s'est"]
+        while (end + 1 < parts.length && isArticlePhraseContentToken(parts[end + 1]!)) {
+          end++
+          chunk.push(decodeSignToken(parts[end]!))
+          if (isFrenchInfinitive(parts[end]!) || normalizeToken(parts[end]!) === 'retourne') {
+            // take one participle then stop before karma/meta
+            break
+          }
+        }
+        if (out.length > 0 && /^(ca|ça)$/i.test(out[out.length - 1]!)) {
+          out[out.length - 1] = `ça ${chunk.join(' ')}`
+        } else {
+          out.push(chunk.join(' '))
+        }
+        i = end + 1
+        continue
+      }
+      out.push(`s'${decodeSignToken(parts[i + 1]!)}`)
+      i += 2
+      continue
+    }
+
+    // se + infinitif (se battre, se promener…)
+    if (n === 'se' && isArticlePhraseContentToken(parts[i + 1] ?? '')) {
+      let end = i + 1
+      const chunk = ['se', decodeSignToken(parts[end]!)]
+      // se faire + verbe ; se renfermer sur soi ; se pencher sur
+      while (end + 1 < parts.length) {
+        const next = parts[end + 1]!
+        const nextN = normalizeToken(next)
+        if (FR_SYNONYM_LIST_NOISE.has(nextN)) break
+        if (
+          nextN === 'sur' ||
+          nextN === 'faire' ||
+          nextN === 'soi' ||
+          (isFrenchInfinitive(next) && normalizeToken(parts[end]!) === 'faire')
+        ) {
+          end++
+          chunk.push(decodeSignToken(next))
+          continue
+        }
+        break
+      }
+      out.push(chunk.join(' '))
+      i = end + 1
+      continue
+    }
 
     // à part ça
     if (n === 'a' && n1 === 'part' && n2 === 'ca') {
@@ -1494,6 +1748,16 @@ function rawSynonymParts(signId: string): string[] {
   // Notes de tournage après un marqueur numérique (ex. etiqueter_une_personne_1_insistance_sur_l_actif)
   const cleanedId = signId.replace(/_\d+_insistance(?:_.*)?$/i, '')
   let parts = signIdBaseParts(cleanedId)
+  // Tag grammatical « temps de l'indicatif » — pas des synonymes
+  if (
+    parts.length >= 4 &&
+    normalizeToken(parts[parts.length - 4]!) === 'temps' &&
+    normalizeToken(parts[parts.length - 3]!) === 'de' &&
+    normalizeToken(parts[parts.length - 2]!) === 'l' &&
+    normalizeToken(parts[parts.length - 1]!) === 'indicatif'
+  ) {
+    parts = parts.slice(0, -4)
+  }
   const countMarker = getSynonymCountMarker(cleanedId)
   if (countMarker !== null) {
     parts = parts.filter((p) => !/^[2-9]$/.test(p))
@@ -1506,13 +1770,18 @@ function rawSynonymParts(signId: string): string[] {
 }
 
 function getFlatSynonymSegments(signId: string): string[] | null {
+  const base = signId.replace(/_\d+$/, '')
+  // Conjonctions temporelles : dès que / lorsque / quand (pas « date » ni « conjonction »)
+  if (base === 'date_des_que_lorsque_quand_conjonction') {
+    return ['des que', 'lorsque', 'quand']
+  }
+
   let segments = mergeSynonymGroupParts(rawSynonymParts(signId))
   segments = mergeArticleBoundParts(segments)
   segments = segments.filter((s) => !FR_SYNONYM_LIST_NOISE.has(normalizeToken(s)))
   segments = segments.filter((s) => !FR_SYNONYM_TRAILING_SKIP.has(normalizeToken(s)))
   segments = segments.filter((s) => !isSignCategoryMarker(s, signId))
   segments = segments.filter((s) => !isBareArticleOrClitic(s))
-  const base = signId.replace(/_\d+$/, '')
   segments = segments.filter((s) => {
     if (!FR_DURATION_UNITS.has(normalizeToken(s))) return true
     // unité seule OK seulement pour les signes dédiés (mois_1, an_1…)
@@ -1598,6 +1867,19 @@ function synonymSegmentDisplay(raw: string, segment: string): string {
   if (norm === 'e mail' || segment === 'e-mail') return 'E-mail'
   if (norm === 'a part ca') return 'À part ça'
   if (norm === 'tout juste') return 'Tout juste'
+  if (norm === 'plus que parfait' || norm === 'plus-que-parfait') return 'Plus-que-parfait'
+  if (norm === 'plutot mourir que') return 'Plutot mourir que'
+  if (norm === 'des que') return 'Dès que'
+  if (norm === 'quand meme') return 'Quand meme'
+  if (norm === 'ne pas' || /^ne pas\b/.test(norm)) return verbalPhraseDisplay(trimmed || segment)
+  if (norm === "n'importe" || norm === 'n importe') return "N'importe"
+  if (norm === "n'est" || norm === 'n est') return "N'est"
+  if (norm === "n'en" || norm === 'n en') return "N'en"
+  if (norm === "s'il vous plait" || norm === "s'il vous plaît") return "S'il vous plaît"
+  if (/^se\s/.test(norm)) return verbalPhraseDisplay(trimmed || segment)
+  if (/^s['']/.test(segment) || /^s['']/.test(norm) || /^ça s['']/.test(norm) || /^ca s['']/.test(norm)) {
+    return verbalPhraseDisplay(trimmed || segment)
+  }
   if (norm === 'tous les ans') return 'Tous les ans'
   if (norm === 'face a face') return 'Face à face'
   if (norm === 'a cause de') return 'À cause de'
@@ -1636,6 +1918,15 @@ function extractFlatSynonymListSenses(signId: string, label: string, lang: Lang)
   const segments = getFlatSynonymSegments(signId)
   if (!segments) return null
 
+  const base = signId.replace(/_\d+$/, '')
+  if (base === 'date_des_que_lorsque_quand_conjonction') {
+    return segments.map((segment) => {
+      const display = synonymSegmentDisplay(segment, segment)
+      const lemma = normalizeToken(display)
+      return { word: display, lemma, senseKey: `${lemma}@${signId}`, signId }
+    })
+  }
+
   const senses: DictionarySense[] = []
   const seen = new Set<string>()
   let remaining = label.replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -1658,14 +1949,88 @@ function extractFlatSynonymListSenses(signId: string, label: string, lang: Lang)
   return senses.length >= 2 ? senses : null
 }
 
-function extractDedicatedCompoundSenses(signId: string, lang: Lang): DictionarySense[] | null {
-  if (lang !== 'fr') return null
+/** Temps verbaux étiquetés « …, temps de l'indicatif ». */
+const FR_GRAMMAR_TENSE_DISPLAY: Record<string, string> = {
+  plus_que_parfait: 'Plus-que-parfait',
+  futur_simple: 'Futur simple',
+  futur_anterieur: 'Futur antérieur',
+  passe_compose: 'Passé composé',
+  passe_simple: 'Passé simple',
+  passe_anterieur: 'Passé antérieur',
+  imparfait: 'Imparfait',
+}
+
+function extractDedicatedCompoundSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
   const base = signId.replace(/_\d+$/, '')
+  const trimmed = label.trim()
+
+  // Pays / régions multi-mots — toutes langues (sign_id FR), libellé local si dispo
+  const place = matchCompoundPlaceParts(base.split('_').filter(Boolean))
+  if (place) {
+    const display =
+      lang === 'fr' || !trimmed || /[,;]/.test(trimmed)
+        ? place.display
+        : formatPhraseDisplay(trimmed)
+    const lemma = normalizeToken(display)
+    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+  }
+
+  // Composés figés internationaux (wifi, t-shirt…)
+  if (base === 'wi_fi') {
+    return [{ word: 'Wifi', lemma: 'wifi', senseKey: `wifi@${signId}`, signId }]
+  }
+  if (base === 't_shirt') {
+    return [{ word: 'T-shirt', lemma: 't-shirt', senseKey: `t-shirt@${signId}`, signId }]
+  }
+  if (base === 'post_it') {
+    return [{ word: 'Post-it', lemma: 'post-it', senseKey: `post-it@${signId}`, signId }]
+  }
+  if (base === 'koh_lanta') {
+    const display = trimmed && !/[,;]/.test(trimmed) ? formatPhraseDisplay(trimmed) : 'Koh Lanta'
+    const lemma = normalizeToken(display)
+    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+  }
+  if (base === 'fils_de_pute') {
+    const display =
+      lang === 'fr' || !trimmed
+        ? 'Fils de pute'
+        : formatPhraseDisplay(trimmed)
+    const lemma = normalizeToken(display)
+    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+  }
+
+  if (lang !== 'fr') return null
+
   if (base === 'la_bas') {
     return [{ word: 'La bas', lemma: 'la bas', senseKey: `la bas@${signId}`, signId }]
   }
   if (base === 'fer_a_cheval_de_trait') {
     return [{ word: 'Fer à cheval', lemma: 'fer a cheval', senseKey: `fer a cheval@${signId}`, signId }]
+  }
+
+  if (base === 'plutot_mourir_que') {
+    return [{
+      word: 'Plutot mourir que',
+      lemma: 'plutot mourir que',
+      senseKey: `plutot mourir que@${signId}`,
+      signId,
+    }]
+  }
+  if (base === 'quand_meme') {
+    return [{
+      word: 'Quand meme',
+      lemma: 'quand meme',
+      senseKey: `quand meme@${signId}`,
+      signId,
+    }]
+  }
+  if (signId.endsWith('_temps_de_l_indicatif')) {
+    const tenseId = signId.slice(0, -'_temps_de_l_indicatif'.length)
+    const display =
+      FR_GRAMMAR_TENSE_DISPLAY[tenseId] ??
+      formatPhraseDisplay(tenseId.replace(/_/g, ' '))
+    const lemma = normalizeToken(display)
+    return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
   return null
 }
@@ -2752,7 +3117,7 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
 
-  const dedicatedCompound = extractDedicatedCompoundSenses(signId, lang)
+  const dedicatedCompound = extractDedicatedCompoundSenses(signId, trimmed, lang)
   if (dedicatedCompound) return filterDictionarySenses(dedicatedCompound, signId)
 
   const deauCompound = extractDeauCompoundSenses(signId, trimmed, lang)

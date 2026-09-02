@@ -1,6 +1,7 @@
 // AUTO-GENERATED — ne pas éditer manuellement
 // Source : Avatar/dataset.json + variantes automatiques (pluriel, conjugaison, synonymes)
 
+import { DISABLED_SIGNS } from './disabledSigns'
 import { SIGN_LABELS_EN, SIGN_LABELS_TR } from './signLabels'
 
 function removeAccents(str: string): string {
@@ -36859,14 +36860,19 @@ function englishLemmatize(word: string): string[] {
   return [...candidates]
 }
 
+function acceptSign(signId: string | null | undefined): string | null {
+  if (!signId || DISABLED_SIGNS.has(signId)) return null
+  return signId
+}
+
 export function lookupWord(word: string, language: string): string | null {
   const norm = removeAccents(word.toLowerCase().trim())
   if (!norm || norm === 'rsquo') return null
 
   // Étape 1 : remappages de faux amis (avant le lookup direct)
-  if (language === 'fr' && FR_REMAP[norm]) return FR_REMAP[norm]
-  if (language === 'en' && EN_REMAP[norm])  return EN_REMAP[norm]
-  if (language === 'tr' && TR_REMAP[norm])  return TR_REMAP[norm]
+  if (language === 'fr' && FR_REMAP[norm]) return acceptSign(FR_REMAP[norm])
+  if (language === 'en' && EN_REMAP[norm])  return acceptSign(EN_REMAP[norm])
+  if (language === 'tr' && TR_REMAP[norm])  return acceptSign(TR_REMAP[norm])
 
   // Étape 2 : mots grammaticaux à ignorer
   if (language === 'fr' && FR_CONTEXTUAL_SKIP.has(norm)) return null
@@ -36882,40 +36888,41 @@ export function lookupWord(word: string, language: string): string | null {
   } else {
     direct = FR_REVERSE[norm] ?? null
   }
-  if (direct) return direct
+  const acceptedDirect = acceptSign(direct)
+  if (acceptedDirect) return acceptedDirect
 
   // Étape 4 : formes irrégulières / conjugaisons absentes du dataset
-  if (language === 'fr') { const irr = FR_IRREGULAR_MAP[norm]; if (irr) return irr }
-  if (language === 'en') { const irr = EN_IRREGULAR_MAP[norm]; if (irr) return irr }
-  if (language === 'tr') { const irr = TR_IRREGULAR_MAP[norm]; if (irr) return irr }
+  if (language === 'fr') { const irr = acceptSign(FR_IRREGULAR_MAP[norm]); if (irr) return irr }
+  if (language === 'en') { const irr = acceptSign(EN_IRREGULAR_MAP[norm]); if (irr) return irr }
+  if (language === 'tr') { const irr = acceptSign(TR_IRREGULAR_MAP[norm]); if (irr) return irr }
 
   // Étape 5 : pronoms/déterminants isolés
-  if (language === 'fr') { const pro = FR_PRONOUN_MAP[norm]; if (pro) return pro }
-  if (language === 'en') { const pro = EN_PRONOUN_MAP[norm]; if (pro) return pro }
-  if (language === 'tr') { const pro = TR_PRONOUN_MAP[norm]; if (pro) return pro }
+  if (language === 'fr') { const pro = acceptSign(FR_PRONOUN_MAP[norm]); if (pro) return pro }
+  if (language === 'en') { const pro = acceptSign(EN_PRONOUN_MAP[norm]); if (pro) return pro }
+  if (language === 'tr') { const pro = acceptSign(TR_PRONOUN_MAP[norm]); if (pro) return pro }
 
   // Étape 6 (FR uniquement) : synonymes dans les clés composées
   if (language === 'fr') {
-    const syn = FR_SYNONYM_MAP.get(norm)
+    const syn = acceptSign(FR_SYNONYM_MAP.get(norm))
     if (syn) return syn
   }
 
   // Étape 7 : lemmatisation morphologique
   if (language === 'fr') {
     for (const lemma of frenchLemmatize(norm)) {
-      const r = FR_REVERSE[lemma] ?? FR_SYNONYM_MAP.get(lemma) ?? null
+      const r = acceptSign(FR_REVERSE[lemma] ?? FR_SYNONYM_MAP.get(lemma) ?? null)
       if (r) return r
     }
   }
   if (language === 'en') {
     for (const stem of englishLemmatize(norm)) {
-      const r = EN_REVERSE[stem] ?? EN_DYNAMIC.get(stem) ?? EN_IRREGULAR_MAP[stem] ?? null
+      const r = acceptSign(EN_REVERSE[stem] ?? EN_DYNAMIC.get(stem) ?? EN_IRREGULAR_MAP[stem] ?? null)
       if (r) return r
     }
   }
   if (language === 'tr') {
     for (const stem of turkishLemmatize(norm)) {
-      const r = TR_REVERSE[stem] ?? TR_DYNAMIC.get(stem) ?? TR_IRREGULAR_MAP[stem] ?? null
+      const r = acceptSign(TR_REVERSE[stem] ?? TR_DYNAMIC.get(stem) ?? TR_IRREGULAR_MAP[stem] ?? null)
       if (r) return r
     }
   }

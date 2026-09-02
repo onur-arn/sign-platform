@@ -6,6 +6,7 @@ import {
   resolvePreferredSignId,
   type Lang,
 } from '@/lib/dictionaryEntries'
+import { DISABLED_SIGNS } from '@/lib/disabledSigns'
 import { getSignLabelsMap } from '@/lib/signLabelsMap'
 
 export type DuplicateCandidate = {
@@ -45,6 +46,7 @@ export function listDictionaryDuplicates(
   const lemmaDisplay = new Map<string, string>()
 
   for (const [signId, label] of Object.entries(labelsMap)) {
+    if (DISABLED_SIGNS.has(signId)) continue
     for (const sense of extractDictionarySenses(signId, label, lang)) {
       const set = lemmaToSignIds.get(sense.lemma) ?? new Set()
       set.add(signId)
