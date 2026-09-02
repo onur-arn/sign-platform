@@ -101,6 +101,9 @@ const FR_SYNONYM_GROUP_SEQUENCES: string[][] = [
   ['char', 'de', 'combat'],
   ['chute', 'd', 'rsquo', 'eau'],
   ['chute', 'd', 'eau'],
+  ['d', 'rsquo', 'eau'],
+  ['d', 'eau'],
+  ['courrier', 'electronique'],
   ['appareil', 'auditif'],
   ['prothese', 'auditive'],
   ['bras', 'd', 'honneur'],
@@ -630,7 +633,77 @@ function mergedSegmentDisplay(seq: string[]): string {
   if (norm[0] === 'bras' && norm[1] === 'd' && norm[2] === 'rsquo') {
     return `bras d'${decodeSignToken(seq[3]!)}`
   }
+  if (norm[0] === 'd' && norm[1] === 'rsquo' && norm[2] === 'eau') {
+    return "d'eau"
+  }
+  if (norm[0] === 'd' && norm[1] === 'eau') {
+    return "d'eau"
+  }
   return seq.map(decodeSignToken).join(' ')
+}
+
+function signEndsWithDeau(signId: string): boolean {
+  const base = signId.replace(/_\d+$/, '')
+  return /_d_(?:rsquo_)?eau$/.test(base)
+}
+
+function isDeauSynonymListSign(signId: string): boolean {
+  const base = signId.replace(/_\d+$/, '')
+  if (/^cascade_chute_d(?:_rsquo|_)?eau_/.test(base)) return true
+  const merged = mergeSynonymGroupParts(rawSynonymParts(signId))
+  return (
+    merged.length >= 3 &&
+    merged.some((s) => normalizeToken(s).replace(/['’]/g, ' ') === 'chute d eau')
+  )
+}
+
+/** Composé nominal en … d'eau (chasse d'eau, araignée d'eau…) — une seule entrée, sauf listes de synonymes. */
+function isDeauCompoundSign(signId: string, lang: Lang): boolean {
+  if (lang !== 'fr' || !signEndsWithDeau(signId)) return false
+  return !isDeauSynonymListSign(signId)
+}
+
+function extractDeauCompoundSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (!isDeauCompoundSign(signId, lang)) return null
+  const display = verbalPhraseDisplay(label.trim())
+  const lemma = normalizeToken(display)
+  return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
+}
+
+function isEnSynonymListSign(signId: string, lang: Lang): boolean {
+  if (lang !== 'fr') return false
+  const base = signId.replace(/_\d+$/, '')
+  if (/^beaucoup_en_abondance/.test(base)) return true
+  if (/^en_distanciel_\d+_teletravail/.test(base)) return true
+  const segments = getFlatSynonymSegments(signId)
+  if (!segments || segments.length < 3) return false
+  if (segments.some((s) => normalizeToken(s) === 'en')) return false
+  return segments.some((s) => /\ben\s/.test(s))
+}
+
+/** Expression figée avec « en » (mettre en garde, plus en plus…) — une seule entrée. */
+function isEnLinkerCompoundSign(signId: string, lang: Lang): boolean {
+  if (lang !== 'fr') return false
+  if (isDeauCompoundSign(signId, lang)) return false
+  if (isEnSynonymListSign(signId, lang)) return false
+
+  const base = signId.replace(/_\d+$/, '')
+  if (/^a_partir_de/.test(base)) return false
+  if (/^s_(?:rsquo_)?en(?:_|$)/.test(base)) return false
+
+  const parts = signIdBaseParts(signId)
+  const enIndices = parts.map((p, i) => (normalizeToken(p) === 'en' ? i : -1)).filter((i) => i >= 0)
+  if (enIndices.length !== 1) return false
+
+  const enIdx = enIndices[0]!
+  return enIdx > 0 && enIdx < parts.length - 1
+}
+
+function extractEnLinkerCompoundSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (!isEnLinkerCompoundSign(signId, lang)) return null
+  const display = verbalPhraseDisplay(label.trim())
+  const lemma = normalizeToken(display)
+  return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
 }
 
 function mergeSynonymGroupParts(parts: string[]): string[] {
@@ -674,6 +747,9 @@ function getFlatSynonymSegments(signId: string): string[] | null {
   segments = segments.filter((s) => !isSignCategoryMarker(s, signId))
 
   const base = signId.replace(/_\d+$/, '')
+  if (base === 'courrier_electronique_e_mail_mail') {
+    return ['courrier electronique', 'e-mail', 'mail']
+  }
   if (base === 'cacher_camouflage_dissimuler_ne_pas_voir_directement' && segments.length >= 2) {
     segments = segments.slice(-2)
   }
@@ -689,6 +765,8 @@ function isFlatSynonymListSign(signId: string, lang: Lang): boolean {
   if (lang !== 'fr') return false
   const base = signId.replace(/_\d+$/, '')
   if (base === 'la_bas' || base === 'fer_a_cheval_de_trait') return false
+  if (isDeauCompoundSign(signId, lang)) return false
+  if (isEnLinkerCompoundSign(signId, lang)) return false
 
   const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
   if (contentTokens(signTokens, lang, signId).length <= 1) return false
@@ -722,6 +800,8 @@ function isFlatSynonymListSign(signId: string, lang: Lang): boolean {
 function segmentPartsForMatch(segment: string): string[] {
   if (/^d['']?avis$/i.test(segment)) return ['d', 'avis']
   if (/^d['']?honneur$/i.test(segment)) return ['d', 'honneur']
+  if (/^d['']?eau$/i.test(segment)) return ['d', 'rsquo', 'eau']
+  if (normalizeToken(segment) === 'e mail' || segment === 'e-mail') return ['e', 'mail']
   if (/^s['']?enfuir$/i.test(segment)) return ['s', 'rsquo', 'enfuir']
   if (/^s['']?en\s+lasser$/i.test(segment)) return ['s', 'rsquo', 'en', 'lasser']
   if (/^s['']?en$/i.test(segment)) return ['s', 'en']
@@ -735,7 +815,9 @@ function synonymSegmentDisplay(raw: string, segment: string): string {
   if (norm === 'a partir de') return 'À partir de'
   if (norm === 'la bas') return 'La bas'
   if (norm === 'fer a cheval') return 'Fer à cheval'
+  if (norm === 'e mail' || segment === 'e-mail') return 'E-mail'
   if (/^s'|^il n'/i.test(trimmed) || /^s'|^il n'/i.test(segment)) return verbalPhraseDisplay(trimmed)
+  if (/\bd['']?eau\b/i.test(segment)) return verbalPhraseDisplay(trimmed)
   if (/\s/.test(segment)) return verbalPhraseDisplay(trimmed)
   return capitalizeWord(cleanWord(trimmed, { allowNumeric: true }) ?? trimmed)
 }
@@ -1774,6 +1856,12 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
 
   const dedicatedCompound = extractDedicatedCompoundSenses(signId, lang)
   if (dedicatedCompound) return filterDictionarySenses(dedicatedCompound, signId)
+
+  const deauCompound = extractDeauCompoundSenses(signId, trimmed, lang)
+  if (deauCompound) return filterDictionarySenses(deauCompound, signId)
+
+  const enCompound = extractEnLinkerCompoundSenses(signId, trimmed, lang)
+  if (enCompound) return filterDictionarySenses(enCompound, signId)
 
   const flatSynonymSenses = extractFlatSynonymListSenses(signId, trimmed, lang)
   if (flatSynonymSenses) return filterDictionarySenses(flatSynonymSenses, signId)
