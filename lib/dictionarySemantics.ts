@@ -79,6 +79,54 @@ const FR_MERGED_PHRASES: [string, string][] = [
   ['mini', 'foot'],
 ]
 
+/** Groupes figés dans les listes de synonymes (sign_id → un segment chacun). */
+const FR_SYNONYM_GROUP_SEQUENCES: string[][] = [
+  ['ne', 'pas', 'faire', 'savoir'],
+  ['ne', 'pas', 'voir', 'directement'],
+  ['ne', 'pas', 'montrer'],
+  ['va', 'te', 'faire', 'foutre'],
+  ['travailleuse', 'du', 'sexe'],
+  ['il', 'n', 'rsquo', 'y', 'a', 'pas'],
+  ['il', 'n', 'y', 'a', 'pas'],
+  ['s', 'rsquo', 'en', 'lasser'],
+  ['s', 'rsquo', 'en', 'fuir'],
+  ['s', 'rsquo', 'enfuir'],
+  ['s', 'rsquo', 'enlasser'],
+  ['s', 'en', 'lasser'],
+  ['s', 'en', 'fuir'],
+  ['etre', 'epuise'],
+  ['boite', 'de', 'nuit'],
+  ['chemin', 'de', 'fer'],
+  ['centre', 'commercial'],
+  ['char', 'de', 'combat'],
+  ['chute', 'd', 'rsquo', 'eau'],
+  ['chute', 'd', 'eau'],
+  ['appareil', 'auditif'],
+  ['prothese', 'auditive'],
+  ['bras', 'd', 'honneur'],
+  ['bras', 'd', 'rsquo', 'honneur'],
+  ['musique', 'resonnante'],
+  ['serie', 'televisee'],
+  ['en', 'abondance'],
+  ['en', 'distanciel'],
+  ['royaume', 'uni'],
+  ['call', 'girl'],
+  ['fer', 'a', 'cheval'],
+  ['la', 'bas'],
+]
+
+/** Connecteurs qui ne sont pas des entrées (ex. energie vitalite ou force). */
+const FR_SYNONYM_LIST_NOISE = new Set(['et', 'ou'])
+
+/** Tags en fin de sign_id, pas des synonymes (ex. travailler après boulot emploi…). */
+const FR_SYNONYM_TRAILING_SKIP = new Set(['utiliser', 'travailler', 'frontiere'])
+
+/** Listes de synonymes forcées (priorité sur le découpage verbal/comma). */
+const FR_FLAT_SYNONYM_OVERRIDE = new Set([
+  'cacher_camouflage_dissimuler_ne_pas_voir_directement',
+  'dissimuler_ne_pas_faire_savoir_ne_pas_montrer',
+])
+
 /** Particules dans les noms propres (van Damme, de Gaulle…). */
 const FR_NAME_PARTICLES = new Set([
   'van', 'von', 'de', 'du', 'des', 'le', 'la', 'der', 'di', 'del', 'da', 'dos', 'das', 'do',
@@ -174,6 +222,7 @@ function isProperNameSign(
 
   if (isUnpunctuatedSynonymList(signId, signTokens, content, label, lang)) return false
   if (isAbbreviationSynonymPair(parts)) return false
+  if (isFlatSynonymListSign(signId, lang)) return false
   if (parts.length === 2 && isNounInfinitiveSynonymPair(parts[0]!, parts[1]!, lang)) return false
 
   if (parts.length >= 2 && parts.length <= 4) {
@@ -300,6 +349,16 @@ function mergeSignIdTokens(raw: string[]): string[] {
       i++
       continue
     }
+    if (t === 's' && raw[i + 1] === 'rsquo' && raw[i + 2] === 'en' && raw[i + 3]) {
+      out.push(`s'en${raw[i + 3]}`)
+      i += 3
+      continue
+    }
+    if (t === 's' && raw[i + 1] === 'rsquo' && raw[i + 2]?.startsWith('en')) {
+      out.push(`s'${raw[i + 2]!.replace(/^en/, 'en')}`)
+      i += 2
+      continue
+    }
     if (t === 's' && raw[i + 1] === 'rsquo' && raw[i + 2]) {
       out.push(`s'${raw[i + 2]}`)
       i += 2
@@ -354,6 +413,11 @@ function getSynonymCountMarker(signId: string): number | null {
     const count = parseInt(p, 10)
     const words = parts.filter((x, j) => j !== i && !/^[1-9]$/.test(x))
     if (words.length === count) return count
+  }
+  if (parts.length >= 2 && /^[2-9]$/.test(parts[parts.length - 1]!)) {
+    const digit = parseInt(parts[parts.length - 1]!, 10)
+    const words = parts.slice(0, -1)
+    if (words.length === digit) return digit
   }
   return null
 }
@@ -551,6 +615,170 @@ function signIdBaseParts(signId: string): string[] {
   return signId.replace(/_\d+$/, '').split('_').filter(Boolean)
 }
 
+function mergedSegmentDisplay(seq: string[]): string {
+  const norm = seq.map(normalizeToken)
+  if (norm[0] === 's' && norm[1] === 'rsquo' && norm[2]?.startsWith('en')) {
+    if (norm[2] === 'en' && norm[3]) return `s'en ${decodeSignToken(seq[3]!)}`
+    return `s'${decodeSignToken(seq[2]!)}`
+  }
+  if (norm[0] === 'il' && norm[1] === 'n' && norm[2] === 'rsquo') {
+    return `il n'${seq.slice(3).map(decodeSignToken).join(' ')}`
+  }
+  if (norm[0] === 'chute' && norm[1] === 'd' && norm[2] === 'rsquo') {
+    return `chute d'${decodeSignToken(seq[3]!)}`
+  }
+  if (norm[0] === 'bras' && norm[1] === 'd' && norm[2] === 'rsquo') {
+    return `bras d'${decodeSignToken(seq[3]!)}`
+  }
+  return seq.map(decodeSignToken).join(' ')
+}
+
+function mergeSynonymGroupParts(parts: string[]): string[] {
+  const sequences = [...FR_SYNONYM_GROUP_SEQUENCES].sort((a, b) => b.length - a.length)
+  const out: string[] = []
+  for (let i = 0; i < parts.length; i++) {
+    let matched: string[] | null = null
+    for (const seq of sequences) {
+      if (seq.every((t, j) => normalizeToken(parts[i + j] ?? '') === normalizeToken(t))) {
+        matched = seq
+        break
+      }
+    }
+    if (matched) {
+      out.push(mergedSegmentDisplay(matched))
+      i += matched.length - 1
+      continue
+    }
+    out.push(parts[i]!)
+  }
+  return out
+}
+
+function rawSynonymParts(signId: string): string[] {
+  let parts = signIdBaseParts(signId)
+  const countMarker = getSynonymCountMarker(signId)
+  if (countMarker !== null) {
+    parts = parts.filter((p) => !/^[2-9]$/.test(p))
+  } else if (parts.length >= 2 && /^[2-9]$/.test(parts[parts.length - 1]!)) {
+    const digit = parseInt(parts[parts.length - 1]!, 10)
+    const words = parts.slice(0, -1)
+    if (words.length === digit) parts = words
+  }
+  return parts
+}
+
+function getFlatSynonymSegments(signId: string): string[] | null {
+  let segments = mergeSynonymGroupParts(rawSynonymParts(signId))
+  segments = segments.filter((s) => !FR_SYNONYM_LIST_NOISE.has(normalizeToken(s)))
+  segments = segments.filter((s) => !FR_SYNONYM_TRAILING_SKIP.has(normalizeToken(s)))
+  segments = segments.filter((s) => !isSignCategoryMarker(s, signId))
+
+  const base = signId.replace(/_\d+$/, '')
+  if (base === 'cacher_camouflage_dissimuler_ne_pas_voir_directement' && segments.length >= 2) {
+    segments = segments.slice(-2)
+  }
+  if (base === 'dissimuler_ne_pas_faire_savoir_ne_pas_montrer' && segments.length >= 2) {
+    segments = segments.slice(-2)
+  }
+
+  if (segments.length < 2 || segments.length > 6) return null
+  return segments
+}
+
+function isFlatSynonymListSign(signId: string, lang: Lang): boolean {
+  if (lang !== 'fr') return false
+  const base = signId.replace(/_\d+$/, '')
+  if (base === 'la_bas' || base === 'fer_a_cheval_de_trait') return false
+
+  const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
+  if (contentTokens(signTokens, lang, signId).length <= 1) return false
+  if (getSynonymDePhraseSplit(signId, lang)) return false
+
+  const segments = getFlatSynonymSegments(signId)
+  if (!segments || segments.length < 2 || segments.length > 6) return false
+  if (FR_FLAT_SYNONYM_OVERRIDE.has(base)) return true
+
+  if (getMultiVerbalPhraseSegments(signId, lang)) return false
+  if (isApartirDeSynonymSign(signId, lang)) return false
+
+  if (segments.length === 2) {
+    const first = normalizeToken(segments[0]!.split(/\s+/)[0]!)
+    const second = normalizeToken(segments[1]!.split(/\s+/)[0]!)
+    if (FR_SPECIFIER_NOUNS.has(second) && !FR_SPECIFIER_NOUNS.has(first)) return false
+    if (isTwoTokenPhrase(segments[0]!, segments[1]!, lang)) return false
+    if (isNounInfinitiveSynonymPair(first, second, lang)) return true
+    if (computeGeoCountryTail(signId) && !/\s/.test(segments[1]!)) return false
+    return true
+  }
+
+  if (computeGeoCountryTail(signId) && !isSynonymGeoWordList(signId)) return false
+
+  const countMarker = getSynonymCountMarker(signId)
+  if (countMarker !== null && segments.length === countMarker) return true
+
+  return true
+}
+
+function segmentPartsForMatch(segment: string): string[] {
+  if (/^d['']?avis$/i.test(segment)) return ['d', 'avis']
+  if (/^d['']?honneur$/i.test(segment)) return ['d', 'honneur']
+  if (/^s['']?enfuir$/i.test(segment)) return ['s', 'rsquo', 'enfuir']
+  if (/^s['']?en\s+lasser$/i.test(segment)) return ['s', 'rsquo', 'en', 'lasser']
+  if (/^s['']?en$/i.test(segment)) return ['s', 'en']
+  return segment.trim().split(/\s+/u)
+}
+
+function synonymSegmentDisplay(raw: string, segment: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return capitalizeWord(decodeSignToken(segment))
+  const norm = normalizeToken(segment)
+  if (norm === 'a partir de') return 'À partir de'
+  if (norm === 'la bas') return 'La bas'
+  if (norm === 'fer a cheval') return 'Fer à cheval'
+  if (/^s'|^il n'/i.test(trimmed) || /^s'|^il n'/i.test(segment)) return verbalPhraseDisplay(trimmed)
+  if (/\s/.test(segment)) return verbalPhraseDisplay(trimmed)
+  return capitalizeWord(cleanWord(trimmed, { allowNumeric: true }) ?? trimmed)
+}
+
+function extractFlatSynonymListSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (!isFlatSynonymListSign(signId, lang)) return null
+  const segments = getFlatSynonymSegments(signId)
+  if (!segments) return null
+
+  const senses: DictionarySense[] = []
+  const seen = new Set<string>()
+  let remaining = label.replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim()
+
+  for (const segment of segments) {
+    const parts = segmentPartsForMatch(segment)
+    const raw =
+      extractLeadingSegmentPhrase(remaining, parts) ??
+      extractLeadingSegmentPhrase(remaining, parts.map((p) => decodeSignToken(p))) ??
+      segment
+    remaining = remaining.slice(raw.length).trim()
+    const display = synonymSegmentDisplay(raw, segment)
+    const key = normalizeToken(raw || segment)
+    const lemma = normalizeToken(display)
+    if (!lemma || seen.has(key)) continue
+    seen.add(key)
+    senses.push({ word: display, lemma, senseKey: `${key}@${signId}`, signId })
+  }
+
+  return senses.length >= 2 ? senses : null
+}
+
+function extractDedicatedCompoundSenses(signId: string, lang: Lang): DictionarySense[] | null {
+  if (lang !== 'fr') return null
+  const base = signId.replace(/_\d+$/, '')
+  if (base === 'la_bas') {
+    return [{ word: 'La bas', lemma: 'la bas', senseKey: `la bas@${signId}`, signId }]
+  }
+  if (base === 'fer_a_cheval_de_trait') {
+    return [{ word: 'Fer à cheval', lemma: 'fer a cheval', senseKey: `fer a cheval@${signId}`, signId }]
+  }
+  return null
+}
+
 /** sign_id avec deux tokens identiques (yo_yo, bla_bla) → un seul mot au dictionnaire. */
 function isReduplicatedCompound(signId: string): boolean {
   const parts = signIdBaseParts(signId)
@@ -594,7 +822,7 @@ function hasRelationalGeoMarker(parts: string[]): boolean {
 }
 
 /** Détecte ville/lieu + pays via le sign_id (fiable pour toutes les langues d'affichage). */
-function getGeoCountryTailFromSignId(signId: string): GeoCountryTail | null {
+function computeGeoCountryTail(signId: string): GeoCountryTail | null {
   const parts = signIdBaseParts(signId)
   if (parts.length < 2 || hasRelationalGeoMarker(parts)) return null
 
@@ -623,6 +851,25 @@ function getGeoCountryTailFromSignId(signId: string): GeoCountryTail | null {
   }
 
   return null
+}
+
+function isSynonymGeoWordList(signId: string): boolean {
+  const parts = signIdBaseParts(signId).map(normalizeToken)
+  if (parts.length < 3) return false
+  return parts.every(
+    (n) =>
+      FR_COUNTRIES.has(n) ||
+      isFrenchAdjective(n) ||
+      n === 'anglais' ||
+      n === 'europeen' ||
+      n === 'royaume' ||
+      n === 'uni',
+  )
+}
+
+function getGeoCountryTailFromSignId(signId: string): GeoCountryTail | null {
+  if (isSynonymGeoWordList(signId)) return null
+  return computeGeoCountryTail(signId)
 }
 
 function getGeoCountryTail(content: string[], signId: string, _lang: Lang): GeoCountryTail | null {
@@ -842,6 +1089,7 @@ function extractQualifiedNounSenses(
 }
 
 function hasPhraseConnector(signId: string, signTokens: string[], lang: Lang): boolean {
+  if (lang === 'fr' && isFlatSynonymListSign(signId, lang)) return false
   if (/_heures_/.test(signId)) return true
   if (/_d_/.test(signId) || /_du_/.test(signId) || /_de_/.test(signId) || /_la_/.test(signId) || /_le_/.test(signId)) return true
   if (/_des_/.test(signId) || /_au_/.test(signId) || /_aux_/.test(signId)) return true
@@ -1117,6 +1365,19 @@ function isMultiVerbalPhraseStart(part: string, prevPart: string | null): boolea
 function getMultiVerbalPhraseSegments(signId: string, lang: Lang): string[][] | null {
   if (lang !== 'fr') return null
   if (isApartirDeSynonymSign(signId, lang)) return null
+
+  const flatSegments = getFlatSynonymSegments(signId)
+  if (flatSegments && flatSegments.length >= 3) return null
+
+  const flatParts = mergeSynonymGroupParts(rawSynonymParts(signId))
+  if (
+    flatParts.length >= 5 &&
+    flatParts.every((p) => !/\s/.test(p)) &&
+    !flatParts.some((p) => FR_VERB_PHRASE_ATTACH.has(normalizeToken(p)))
+  ) {
+    return null
+  }
+
   const parts = signIdBaseParts(signId)
   if (parts.length < 4) return null
 
@@ -1170,6 +1431,29 @@ function extractLeadingSegmentPhrase(label: string, segmentParts: string[]): str
       continue
     }
 
+    if (
+      normalizeToken(segPart) === 's' &&
+      normalizeToken(segmentParts[segIdx + 1] ?? '') === 'rsquo' &&
+      normalizeToken(segmentParts[segIdx + 2] ?? '') === 'en' &&
+      /^s['']?en$/i.test(stripTokenPunctuation(labelPart))
+    ) {
+      segIdx += 3
+      endIdx = i + 1
+      continue
+    }
+
+    if (
+      normalizeToken(segPart) === 's' &&
+      normalizeToken(segmentParts[segIdx + 1] ?? '') === 'rsquo' &&
+      segIdx + 2 < segmentParts.length &&
+      /^s['']?en/i.test(stripTokenPunctuation(labelPart)) &&
+      normalizeToken(segmentParts[segIdx + 2] ?? '') !== 'en'
+    ) {
+      segIdx += 3
+      endIdx = i + 1
+      continue
+    }
+
     if (matchSegmentToken(labelPart, segPart)) {
       segIdx++
       endIdx = i + 1
@@ -1184,7 +1468,18 @@ function extractLeadingSegmentPhrase(label: string, segmentParts: string[]): str
 }
 
 function verbalPhraseDisplay(raw: string): string {
-  const trimmed = raw.trim().replace(/\bd avis\b/gi, "d'avis")
+  let trimmed = raw.trim().replace(/\bd\s+avis\b/gi, "d'avis")
+  trimmed = trimmed
+    .replace(/\bd\s+honneur\b/gi, "d'honneur")
+    .replace(/\bd\s+eau\b/gi, "d'eau")
+    .replace(/\bbras d honneur\b/gi, "bras d'honneur")
+    .replace(/\bchute d eau\b/gi, "chute d'eau")
+    .replace(/\bs\s+en\s+fuir\b/gi, "s'enfuir")
+    .replace(/\bs\s+en\s+lasser\b/gi, "s'en lasser")
+    .replace(/\bil\s+n\s+y\s+a\s+pas\b/gi, "il n'y a pas")
+    .replace(/\bs\s+'\s+/g, "s'")
+    .replace(/\bd\s+'\s+/g, "d'")
+    .replace(/\bil\s+n\s+'\s+/gi, "il n'")
   if (!trimmed) return trimmed
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
 }
@@ -1378,6 +1673,7 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
   if (isNumericExpression(signId, trimmed)) return 'phrase'
   if (isReduplicatedCompound(signId)) return 'dedicated'
   if (content.length <= 1) return 'dedicated'
+  if (isFlatSynonymListSign(signId, lang)) return 'synonym_list'
   if (isPrepositionalVerbList(signId, content, lang)) return 'synonym_list'
   if (isProperNameSign(signId, signTokens, content, trimmed, lang)) return 'phrase'
   if (getSynonymVerbalPhraseTail(signId)) return 'synonym_list'
@@ -1475,6 +1771,12 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
     const lemma = normalizeToken(display)
     return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
   }
+
+  const dedicatedCompound = extractDedicatedCompoundSenses(signId, lang)
+  if (dedicatedCompound) return filterDictionarySenses(dedicatedCompound, signId)
+
+  const flatSynonymSenses = extractFlatSynonymListSenses(signId, trimmed, lang)
+  if (flatSynonymSenses) return filterDictionarySenses(flatSynonymSenses, signId)
 
   const signTokensEarly = stripTrailingVariantSuffix(splitSignId(signId), signId)
   const contentEarly = contentTokens(signTokensEarly, lang, signId)
