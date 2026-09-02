@@ -630,6 +630,15 @@ function labelContentWords(label: string, lang: Lang): string[] {
   return words
 }
 
+/** Mots de nombre français (quatre cents, cent dix, quatre-vingts…). */
+const FR_NUMBER_WORDS = new Set([
+  'zero', 'un', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
+  'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize',
+  'vingt', 'vingts', 'trente', 'quarante', 'cinquante', 'soixante',
+  'septante', 'huitante', 'octante', 'nonante',
+  'cent', 'cents', 'mille', 'milles', 'million', 'millions', 'milliard', 'milliards',
+])
+
 /** Chiffres, heures, durées, nombres composés (cent dix, 10 heures…). */
 export function isNumericExpression(signId: string, label: string): boolean {
   const trimmed = label.trim()
@@ -640,7 +649,72 @@ export function isNumericExpression(signId: string, label: string): boolean {
   if (/^en_\d+_/.test(signId) || /^a_\d+_heures/.test(signId)) return true
   if (/_\d+_(heures|heure|an|mois|semaine|jour|cent|dix|vingt)/i.test(signId)) return true
   if (/^\d{2,}_(cent|dix|vingt|onze|douze|treize|quatorze|quinze|seize)/i.test(signId)) return true
+  if (isSpelledNumberSign(signId)) return true
   return false
+}
+
+function isSpelledNumberParts(parts: string[]): boolean {
+  if (parts.length === 0) return false
+  return parts.every((p) => FR_NUMBER_WORDS.has(normalizeToken(p)))
+}
+
+/** Nombre en lettres (quatre_cents, cent_dix…) avec ou sans chiffre en tête du sign_id. */
+function isSpelledNumberSign(signId: string): boolean {
+  const base = signId.replace(/_\d+$/, '')
+  const parts = base.split('_').filter(Boolean)
+  if (parts.length === 0) return false
+  if (/^[0-9]+$/.test(parts[0]!)) {
+    const rest = parts.slice(1)
+    if (rest.length === 0) return false
+    // 2_mois, 10_heures… = durée/heure, pas un nom de nombre
+    if (rest.length === 1 && FR_DURATION_UNITS.has(normalizeToken(rest[0]!))) return false
+    if (rest.some((p) => /^(heures?|h)$/i.test(p))) return false
+    return isSpelledNumberParts(rest)
+  }
+  return parts.length >= 2 && isSpelledNumberParts(parts)
+}
+
+function spelledNumberDisplay(signId: string, label: string): string {
+  const trimmed = label.trim().replace(/^\d+\s+/, '')
+  if (trimmed && !/^\d+$/.test(trimmed)) {
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  }
+  const base = signId.replace(/_\d+$/, '')
+  const parts = base.split('_').filter((p) => !/^[0-9]+$/.test(p))
+  const joined = parts.map(decodeSignToken).join(' ')
+  return joined.charAt(0).toUpperCase() + joined.slice(1)
+}
+
+/**
+ * ex. 400_quatre_cents → « 400 » · « Quatre cents »
+ * (chiffre + expression en lettres, pas Quatre | Cents séparés).
+ */
+function extractNumericDualSenses(signId: string, label: string, lang: Lang): DictionarySense[] | null {
+  if (lang !== 'fr' || !isSpelledNumberSign(signId)) return null
+
+  const base = signId.replace(/_\d+$/, '')
+  const parts = base.split('_').filter(Boolean)
+  const written = spelledNumberDisplay(signId, label)
+  const writtenLemma = normalizeToken(written)
+  if (!writtenLemma) return null
+
+  const senses: DictionarySense[] = []
+  if (/^[0-9]+$/.test(parts[0]!)) {
+    const digit = parts[0]!
+    senses.push({
+      word: digit,
+      lemma: digit,
+      senseKey: `${digit}@${signId}`,
+      signId,
+    })
+  }
+  senses.push({
+    word: written,
+    lemma: writtenLemma,
+    senseKey: `${writtenLemma}@${signId}`,
+    signId,
+  })
+  return senses.length > 0 ? senses : null
 }
 
 function enrichNumericDisplay(signId: string, label: string): string {
@@ -1464,6 +1538,7 @@ function isFlatSynonymListSign(signId: string, lang: Lang): boolean {
   if (base === 'la_bas' || base === 'fer_a_cheval_de_trait') return false
   if (isDeauCompoundSign(signId, lang)) return false
   if (isEnLinkerCompoundSign(signId, lang)) return false
+  if (isSpelledNumberSign(signId)) return false
 
   const signTokens = stripTrailingVariantSuffix(splitSignId(signId), signId)
   if (contentTokens(signTokens, lang, signId).length <= 1) return false
@@ -2688,6 +2763,9 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
 
   const enCompound = extractEnLinkerCompoundSenses(signId, trimmed, lang)
   if (enCompound) return filterDictionarySenses(enCompound, signId)
+
+  const numericDualSenses = extractNumericDualSenses(signId, trimmed, lang)
+  if (numericDualSenses) return filterDictionarySenses(numericDualSenses, signId)
 
   const flatSynonymSenses = extractFlatSynonymListSenses(signId, trimmed, lang)
   if (flatSynonymSenses) return filterDictionarySenses(flatSynonymSenses, signId)
