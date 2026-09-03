@@ -11,7 +11,7 @@ export type DictionaryEntry = {
 
 import { DICTIONARY_PREFERRED_SIGN } from './dictionaryPreferences'
 import { DISABLED_SIGNS } from './disabledSigns'
-import { translateFrDictionarySense } from './dictionaryLexicon'
+import { isResidualFrenchDisplay, translateFrDictionarySense } from './dictionaryLexicon'
 import { SIGN_LABELS_FR } from './signLabels'
 import {
   areSynonymSigns,
@@ -89,39 +89,42 @@ function buildFrenchDictionaryEntries(
   const labelsMap = SIGN_LABELS_FR
   const bySenseKey = new Map<string, DictionaryEntry>()
   const signIdsByLemma = new Map<string, Set<string>>()
+  const entriesByLemma = new Map<string, DictionaryEntry[]>()
+  const senseCountBySign = new Map<string, number>()
 
   for (const [signId, label] of Object.entries(labelsMap)) {
     if (DISABLED_SIGNS.has(signId)) continue
-    for (const sense of extractDictionarySenses(signId, label, 'fr')) {
-      bySenseKey.set(sense.senseKey, {
+    const senses = extractDictionarySenses(signId, label, 'fr')
+    senseCountBySign.set(signId, senses.length)
+    for (const sense of senses) {
+      const entry: DictionaryEntry = {
         word: sense.word,
         lemma: sense.lemma,
         normalized: sense.lemma,
         senseKey: sense.senseKey,
         signId: sense.signId,
-      })
+      }
+      bySenseKey.set(sense.senseKey, entry)
       const set = signIdsByLemma.get(sense.lemma) ?? new Set()
       set.add(signId)
       signIdsByLemma.set(sense.lemma, set)
+      const list = entriesByLemma.get(sense.lemma) ?? []
+      list.push(entry)
+      entriesByLemma.set(sense.lemma, list)
     }
   }
 
   const toRemove = new Set<string>()
-  const senseCountBySign = new Map<string, number>()
-
-  for (const [signId, label] of Object.entries(labelsMap)) {
-    if (DISABLED_SIGNS.has(signId)) continue
-    senseCountBySign.set(signId, extractDictionarySenses(signId, label, 'fr').length)
-  }
 
   for (const [lemma, signIdSet] of signIdsByLemma) {
     const clusters = clusterSynonymSigns(lemma, [...signIdSet], 'fr', labelsMap)
     for (const cluster of clusters) {
       if (cluster.length < 2) continue
       const chosen = resolvePreferredSignId(lemma, cluster, 'fr', preferences).signId
+      const clusterSet = new Set(cluster)
 
-      for (const entry of bySenseKey.values()) {
-        if (entry.lemma !== lemma || !cluster.includes(entry.signId)) continue
+      for (const entry of entriesByLemma.get(lemma) ?? []) {
+        if (!clusterSet.has(entry.signId)) continue
         if (!isBareSynonymEntry(entry)) continue
         if ((senseCountBySign.get(entry.signId) ?? 0) > 1) continue
         if (entry.signId !== chosen && areSynonymSigns(entry.signId, chosen, lemma, 'fr', labelsMap)) {
@@ -209,6 +212,7 @@ function localizeFrenchEntries(
   for (const entry of frEntries) {
     const word = translateFrDictionarySense(entry.word, entry.lemma, lang, entry.signId).trim()
     if (!word) continue
+    if (isResidualFrenchDisplay(word, lang)) continue
     const lemma = normalizeLemma(word)
     if (!lemma) continue
     // Clé unique : évite de fusionner deux sens FR distincts (ex. vieux / vieillir → old)
@@ -254,18 +258,48 @@ function localizeFrenchEntries(
 /**
  * Construit le dictionnaire avec désambiguïsation sémantique.
  * FR = source de vérité ; EN/TR/PL reprennent la même structure avec traductions de sens.
+ * Résultats mis en cache (langue + préférences) pour des changements de langue instantanés.
  */
+function preferencesCacheKey(preferences: Record<string, string>): string {
+  const keys = Object.keys(preferences)
+  if (keys.length === 0) return ''
+  return keys
+    .sort()
+    .map((k) => `${k}=${preferences[k]}`)
+    .join('&')
+}
+
+const frDictionaryCache = new Map<string, DictionaryEntry[]>()
+const localizedDictionaryCache = new Map<string, DictionaryEntry[]>()
+
 export function buildDictionaryEntries(
   labelsMap: Record<string, string>,
   lang: Lang = 'fr',
   preferences: Record<string, string> = {},
 ): DictionaryEntry[] {
+  const prefsKey = preferencesCacheKey(preferences)
+
   if (lang === 'fr') {
-    // labelsMap ignoré si ≠ FR — la source est toujours SIGN_LABELS_FR
     void labelsMap
-    return buildFrenchDictionaryEntries(preferences)
+    const hit = frDictionaryCache.get(prefsKey)
+    if (hit) return hit
+    const built = buildFrenchDictionaryEntries(preferences)
+    frDictionaryCache.set(prefsKey, built)
+    return built
   }
 
-  const frEntries = buildFrenchDictionaryEntries({})
-  return localizeFrenchEntries(frEntries, lang, preferences)
+  const cacheKey = `${lang}:${prefsKey}`
+  const hit = localizedDictionaryCache.get(cacheKey)
+  if (hit) return hit
+
+  const frEntries = buildDictionaryEntries(SIGN_LABELS_FR, 'fr', {})
+  const built = localizeFrenchEntries(frEntries, lang, preferences)
+  localizedDictionaryCache.set(cacheKey, built)
+  return built
+}
+
+/** Préchauffe le dictionnaire (FR + langue active) hors chemin critique UI. */
+export function warmDictionaryCache(lang: Lang = 'fr'): void {
+  buildDictionaryEntries(SIGN_LABELS_FR, 'fr', {})
+  if (lang !== 'fr') buildDictionaryEntries(SIGN_LABELS_FR, lang, {})
 }

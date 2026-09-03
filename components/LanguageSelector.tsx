@@ -1,5 +1,6 @@
 'use client'
 
+import { startTransition } from 'react'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useDarkMode } from '@/contexts/DarkModeContext'
 import type { Language } from '@/lib/i18n/translations'
@@ -19,6 +20,10 @@ export default function LanguageSelector({ variant = 'default' }: LanguageSelect
     { code: 'pl', label: 'Polski', flag: '🇵🇱' },
   ]
 
+  const onSelect = (code: Language) => {
+    startTransition(() => setLanguage(code))
+  }
+
   if (variant === 'compact') {
     return (
       <div
@@ -32,7 +37,7 @@ export default function LanguageSelector({ variant = 'default' }: LanguageSelect
           <button
             key={lang.code}
             type="button"
-            onClick={() => setLanguage(lang.code)}
+            onClick={() => onSelect(lang.code)}
             className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer font-sans"
             style={
               language === lang.code
@@ -60,7 +65,7 @@ export default function LanguageSelector({ variant = 'default' }: LanguageSelect
         <button
           key={lang.code}
           type="button"
-          onClick={() => setLanguage(lang.code)}
+          onClick={() => onSelect(lang.code)}
           className="px-4 py-2.5 rounded-xl font-medium text-sm transition-all cursor-pointer font-sans"
           style={
             language === lang.code

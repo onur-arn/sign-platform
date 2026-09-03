@@ -248,7 +248,7 @@ function isUntranslatedFrenchLeftover(word: string, frWord: string): boolean {
   return false
 }
 
-/** Prénom + nom (ou marque) : on conserve la forme internationale, pas les déclinaisons (Adolfa Hitlera…). */
+/** Prénom + nom (ou marque) : on conserve la forme nominative internationale. */
 function looksLikePersonOrBrandName(word: string): boolean {
   const parts = word.trim().split(/\s+/).filter(Boolean)
   if (parts.length < 2 || parts.length > 5) return false
@@ -257,6 +257,60 @@ function looksLikePersonOrBrandName(word: string): boolean {
     if (n === 'van' || n === 'von' || n === 'de' || n === 'da' || n === 'di' || n === 'del') return true
     return /^[A-ZÀ-ŸÁĆĘŁŃÓŚŹŻİŞĞÜÖÇ]/u.test(p) && p.length >= 2
   })
+}
+
+const INTERNATIONAL_KEEP = new Set([
+  'ok', 'wifi', 'usb', 'sms', 'cv', 'aka', 'tgv', 'atomium', 'post-it', 't-shirt', 'mickey',
+  'disneyland', 'columbo', 'leopold', 'hainaut', 'mons', 'babel', 'avc', 'ia', 'e-mail', 'email',
+  'jo', 'turquie', 'türkiye', 'liege', 'liège',
+])
+
+/** Entrée encore française dans EN/TR/PL (à traduire ou écarter). */
+export function isResidualFrenchDisplay(word: string, lang: Exclude<Lang, 'fr'>): boolean {
+  const s = word.trim()
+  if (!s) return true
+  if (INTERNATIONAL_KEEP.has(normalizeLemma(s))) return false
+  if (looksLikePersonOrBrandName(s)) return false
+  if (/^[\d\s:+.-]+$/.test(s)) return false
+
+  if (/^(c'est|c’est|ça)\b/i.test(s)) return true
+  if (/^(qu'|d'|l'|n'|s'|j'|m'|t')/i.test(s)) return true
+
+  if (/[éèêëàâùûüôöîïçœæ]/i.test(s)) {
+    if (lang === 'pl' && /[ąćęłńóśźż]/i.test(s)) return false
+    if (lang === 'tr' && /[çğıöşü]/i.test(s)) return false
+    return true
+  }
+
+  if (
+    /^(ainsi|aussi|avoir|etre|être|faire|comme|comment|dont|desormais|désormais|commencer|allumer|assurer|grincer|repasser|exercer|trouver|ne pas|il n'|tous les|se faire|se pencher|etre |être |perdre la|ligature|maison des|ecole le|louvain)/i.test(
+      s,
+    )
+  ) {
+    return true
+  }
+
+  if (
+    /\b(le|la|les|des|du|aux)\b/i.test(s) &&
+    /\s/.test(s) &&
+    (lang === 'en' || lang === 'tr' || (lang === 'pl' && !/[ąćęłńóśźż]/i.test(s)))
+  ) {
+    // Toponymes / ASBL belges du type « La Panne »
+    if (/^(la|les|le)\s+[A-ZÀ-Ÿ]/u.test(s) && s.split(/\s+/).length <= 4) return false
+    return true
+  }
+
+  if (/^(s'|d'|l'|n')[a-z]/i.test(s) && /[a-z]{3,}/i.test(s)) return true
+
+  return false
+}
+
+function targetLabelFallback(signId: string, lang: Exclude<Lang, 'fr'>): string | null {
+  const label = LABELS[lang][signId]
+  if (!label?.trim()) return null
+  const display = capitalizeDisplay(label.trim())
+  if (isResidualFrenchDisplay(display, lang)) return null
+  return display
 }
 
 /**
@@ -273,10 +327,15 @@ export function translateFrDictionarySense(
 
   if (signId) {
     const semantic = semanticTranslationForSense(signId, frWord, frLemma, lang)
-    if (semantic && !isUntranslatedFrenchLeftover(semantic, frWord)) return semantic
+    if (
+      semantic &&
+      !isUntranslatedFrenchLeftover(semantic, frWord) &&
+      !isResidualFrenchDisplay(semantic, lang)
+    ) {
+      return semantic
+    }
   }
 
-  // Noms de personnes / marques : garder la forme nominative internationale
   if (looksLikePersonOrBrandName(frWord)) {
     return frWord
   }
@@ -288,25 +347,43 @@ export function translateFrDictionarySense(
   const hit = lex.get(frLemma)
   if (hit) {
     const display = capitalizeDisplay(hit)
-    if (!isUntranslatedFrenchLeftover(display, frWord)) return display
+    if (!isUntranslatedFrenchLeftover(display, frWord) && !isResidualFrenchDisplay(display, lang)) {
+      return display
+    }
   }
 
-  // Acronymes / noms propres internationaux : on garde la forme
   if (
-    /^(aka|avc|tgv|cv|jo|ok|ia|e-mail|email|sms|usb|wifi|post-it|atomium|mickey|disneyland|columbo|leopold|hainaut|mons|babel)$/i.test(
-      frLemma,
-    ) ||
+    INTERNATIONAL_KEEP.has(frLemma) ||
     (/^[a-z]{2,4}$/i.test(frLemma) && frLemma === frLemma.toLowerCase() && !/[aeiouy]{3}/i.test(frLemma))
   ) {
     return capitalizeDisplay(frWord)
   }
 
-  // Ne pas laisser un mot-outil FR tel quel dans EN/TR/PL
   if (FR_LEFTOVER_FORMS.has(frLemma) || FR_LEFTOVER_FORMS.has(normalizeLemma(frWord))) {
     return ''
   }
 
-  return capitalizeDisplay(frWord)
+  if (signId) {
+    const frLabel = SIGN_LABELS_FR[signId]
+    if (frLabel) {
+      const frSenses = extractDictionarySenses(signId, frLabel, 'fr')
+      if (frSenses.length === 1) {
+        const fallback = targetLabelFallback(signId, lang)
+        if (fallback) return fallback
+      }
+    }
+  }
+
+  const raw = capitalizeDisplay(frWord)
+  if (isResidualFrenchDisplay(raw, lang)) {
+    if (signId) {
+      const fallback = targetLabelFallback(signId, lang)
+      if (fallback) return fallback
+    }
+    return ''
+  }
+
+  return raw
 }
 
 export function lexiconCoverage(lang: Exclude<Lang, 'fr'>, frLemmas: string[]) {

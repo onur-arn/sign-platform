@@ -1,23 +1,52 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Sidebar, { type DashboardTab } from '@/components/layout/Sidebar'
 import LanguageSelector from '@/components/LanguageSelector'
 import { DarkModeToggle } from '@/components/DarkModeToggle'
-import TraduireView from '@/components/views/TraduireView'
-import DictionnaireView from '@/components/views/DictionnaireView'
-import DocumentsView from '@/components/views/DocumentsView'
-import AvatarStudioView from '@/components/views/AvatarStudioView'
-import InformationView from '@/components/views/InformationView'
-import AdminPanelView from '@/components/views/AdminPanelView'
 import { useLanguage } from '@/contexts/LanguageContext'
+
+function ViewFallback() {
+  const { t } = useLanguage()
+  return (
+    <div className="grid place-items-center min-h-[240px]">
+      <p style={{ color: 'var(--text-sub)' }}>{t.dashboard.loading}</p>
+    </div>
+  )
+}
+
+const TraduireView = dynamic(() => import('@/components/views/TraduireView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const DictionnaireView = dynamic(() => import('@/components/views/DictionnaireView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const DocumentsView = dynamic(() => import('@/components/views/DocumentsView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const AvatarStudioView = dynamic(() => import('@/components/views/AvatarStudioView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const InformationView = dynamic(() => import('@/components/views/InformationView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const AdminPanelView = dynamic(() => import('@/components/views/AdminPanelView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [tab, setTab] = useState<DashboardTab>('traduire')
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
@@ -46,6 +75,27 @@ export default function DashboardPage() {
     mq.addEventListener('change', sync)
     return () => mq.removeEventListener('change', sync)
   }, [])
+
+  // Préchauffe le dictionnaire en idle pour un changement de langue fluide
+  useEffect(() => {
+    const lang = language === 'en' || language === 'pl' || language === 'tr' ? language : 'fr'
+    const run = () => {
+      void import('@/lib/dictionaryEntries').then(({ warmDictionaryCache }) => {
+        warmDictionaryCache(lang)
+      })
+    }
+    const ric = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+      .requestIdleCallback
+    if (typeof ric === 'function') {
+      const id = ric(run, { timeout: 2500 })
+      return () => {
+        const cancel = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback
+        cancel?.(id)
+      }
+    }
+    const t = window.setTimeout(run, 400)
+    return () => window.clearTimeout(t)
+  }, [language])
 
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'ADMIN'
 
@@ -114,12 +164,14 @@ export default function DashboardPage() {
         </header>
 
         <main className="shell-content">
-          {tab === 'traduire' && <TraduireView />}
-          {tab === 'dictionnaire' && <DictionnaireView />}
-          {tab === 'documents' && <DocumentsView />}
-          {tab === 'avatar' && <AvatarStudioView />}
-          {tab === 'information' && <InformationView />}
-          {tab === 'admin' && isAdmin && <AdminPanelView />}
+          <Suspense fallback={<ViewFallback />}>
+            {tab === 'traduire' && <TraduireView />}
+            {tab === 'dictionnaire' && <DictionnaireView />}
+            {tab === 'documents' && <DocumentsView />}
+            {tab === 'avatar' && <AvatarStudioView />}
+            {tab === 'information' && <InformationView />}
+            {tab === 'admin' && isAdmin && <AdminPanelView />}
+          </Suspense>
         </main>
       </div>
     </div>

@@ -251,6 +251,127 @@ const SEMANTIC_SINGLE_BY_BASE: Record<string, Record<Lang, string>> = {
     tr: 'Vücudun her yerinde',
     pl: 'Po całym ciele',
   },
+  // Expressions figées — éviter le français brut en EN/TR/PL
+  c_rsquo_est_comme_ca: {
+    fr: "C'est comme ca",
+    en: "It's like that",
+    tr: 'Bu böyle',
+    pl: 'To tak',
+  },
+  ainsi_comme_ca: {
+    fr: 'Ainsi comme ca',
+    en: 'Like that',
+    tr: 'Yani böyle',
+    pl: 'Więc tak',
+  },
+  avoir_le_temps_1: {
+    fr: 'Avoir le temps',
+    en: 'Have time',
+    tr: 'Vakti olmak',
+    pl: 'Mieć czas',
+  },
+  c_est_un_hasard_c_est_une_coincidence_tout_juste: {
+    fr: "C'est un hasard / c'est une coincidence",
+    en: 'By chance / coincidence',
+    tr: 'Tesadüf',
+    pl: 'Przypadek / zbieg okoliczności',
+  },
+  ca_monte_et_ca_descend: {
+    fr: 'Ca monte / ca descend',
+    en: 'Go up / go down',
+    tr: 'Çıkmak / inmek',
+    pl: 'Wchodzić / schodzić',
+  },
+  ca_me_rend_malade_degouter: {
+    fr: 'Ca me rend malade',
+    en: 'It makes me sick',
+    tr: 'Mide bulandırıcı',
+    pl: 'To mnie obrzydza',
+  },
+  ca_s_est_retourne_contre_soi_karma_1: {
+    fr: "Ca s'est retourne contre soi",
+    en: 'Backfired',
+    tr: 'Ters tepti',
+    pl: 'Odwróciło się przeciwko sobie',
+  },
+  commencer_debut_1: {
+    fr: 'Commencer / debut',
+    en: 'Start / beginning',
+    tr: 'Başlamak / başlangıç',
+    pl: 'Zaczynać / początek',
+  },
+  d_rsquo_abord_premier_1: {
+    fr: "D'abord / premier",
+    en: 'First / firstly',
+    tr: 'Önce / birinci',
+    pl: 'Najpierw / pierwszy',
+  },
+  s_rsquo_ennuyer: {
+    fr: "S'ennuyer",
+    en: 'Be bored',
+    tr: 'Sıkılmak',
+    pl: 'Nudzić się',
+  },
+  comment_2_comment_faire: {
+    fr: 'Comment / comment faire',
+    en: 'How / how to',
+    tr: 'Nasıl / nasıl yapılır',
+    pl: 'Jak / jak zrobić',
+  },
+  tous_les_mois_une_fois_par_mois: {
+    fr: 'Tous les mois',
+    en: 'Every month',
+    tr: 'Her ay',
+    pl: 'Co miesiąc',
+  },
+  a_partir_de_depart_desormais: {
+    fr: 'A partir de / desormais',
+    en: 'From now on',
+    tr: 'Bundan sonra',
+    pl: 'Od teraz',
+  },
+  grincer_des_dents: {
+    fr: 'Grincer des dents',
+    en: 'Grind teeth',
+    tr: 'Diş gıcırdatmak',
+    pl: 'Zgrzytać zębami',
+  },
+  repasser_le_linge: {
+    fr: 'Repasser le linge',
+    en: 'Iron laundry',
+    tr: 'Ütülemek',
+    pl: 'Prasować',
+  },
+  perdre_la_motivation: {
+    fr: 'Perdre la motivation',
+    en: 'Lose motivation',
+    tr: 'Motivasyonunu kaybetmek',
+    pl: 'Stracić motywację',
+  },
+  assurer_la_confiance: {
+    fr: 'Assurer la confiance',
+    en: 'Build trust',
+    tr: 'Güven sağlamak',
+    pl: 'Zapewnić zaufanie',
+  },
+  allumer_la_lampe_lampe_2: {
+    fr: 'Allumer la lampe',
+    en: 'Turn on the lamp',
+    tr: 'Lambayı yakmak',
+    pl: 'Zapalić lampę',
+  },
+  metaphore_etre_frais: {
+    fr: 'Etre frais',
+    en: 'Be fresh',
+    tr: 'Taze olmak',
+    pl: 'Być świeżym',
+  },
+  etre_capable_pouvoir_oser_oser_1: {
+    fr: 'Etre capable / pouvoir / oser',
+    en: 'Be able / can / dare',
+    tr: 'Yapabilmek / cesaret etmek',
+    pl: 'Być w stanie / móc / ośmielić się',
+  },
 }
 
 /** Temps grammaticaux — termes linguistiques, pas la glose machine. */
@@ -405,6 +526,18 @@ const SEMANTIC_SYNONYM_LISTS: Record<string, Record<Lang, string[]>> = {
     en: ['Protect someone', 'Someone else'],
     tr: ['Birini korumak', 'Başka biri'],
     pl: ['Chronić kogoś', 'Ktoś inny'],
+  },
+  comme_meme_1_pareil_2: {
+    fr: ['Comme', 'Meme', 'Pareil'],
+    en: ['Like', 'Same', 'Alike'],
+    tr: ['Gibi', 'Aynı', 'Benzer'],
+    pl: ['Jak', 'To samo', 'Podobny'],
+  },
+  aussi_egalement_meme_2_pareil_1: {
+    fr: ['Aussi', 'Egalement', 'Meme', 'Pareil'],
+    en: ['Also', 'As well', 'Same', 'Alike'],
+    tr: ['Ayrıca', 'Keza', 'Aynı', 'Benzer'],
+    pl: ['Też', 'Również', 'To samo', 'Podobny'],
   },
 }
 
