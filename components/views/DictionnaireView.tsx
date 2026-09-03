@@ -25,12 +25,18 @@ const SignAvatarPlayer = dynamic(() => import('@/components/avatar/SignAvatarPla
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 function removeAccents(str: string) {
-  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i')
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/İ/g, 'I')
 }
 
+/** Première lettre de section (ignore guillemets / apostrophes en tête). */
 function dictionarySection(entry: { word: string; signId: string }) {
   if (isNumericExpression(entry.signId, entry.word)) return '#'
-  const c = removeAccents(entry.word.trim().toUpperCase())[0] ?? '#'
+  const cleaned = entry.word.trim().replace(/^[\s"'«»„‟‘’‚‛`´]+/u, '')
+  const c = removeAccents(cleaned.toLocaleUpperCase('en-US'))[0] ?? '#'
   return /[A-Z]/.test(c) ? c : '#'
 }
 
@@ -137,7 +143,7 @@ export default function DictionnaireView() {
           <p style={{ color: 'var(--text-sub)' }}>{t.admin.dictionaryNoResult}</p>
         ) : (
           <div className="dict-grid max-h-[480px] overflow-y-auto pr-1">
-            {displayed.slice(0, 400).map((s) => (
+            {displayed.map((s) => (
               <button
                 key={`${s.senseKey}-${s.signId}`}
                 type="button"

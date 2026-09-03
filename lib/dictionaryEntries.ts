@@ -140,6 +140,64 @@ function buildFrenchDictionaryEntries(
   )
 }
 
+function scoreLocalizedEntry(entry: DictionaryEntry): number {
+  const frLemma = entry.senseKey.includes('#') ? entry.senseKey.split('#').pop()! : entry.lemma
+  const tokens = splitSignId(entry.signId).map(normalizeLemma)
+  let score = 0
+  if (tokens.length === 1 && tokens[0] === frLemma) score += 120
+  if (tokens[0] === frLemma) score += 60
+  if (tokens.includes(frLemma)) score += 40
+  if (entry.signId === frLemma || entry.signId.startsWith(`${frLemma}_`)) score += 50
+  // Préférer le signe « atomic » (ordinateur) aux composés calqués
+  score -= tokens.length * 8
+  score -= entry.signId.length * 0.05
+  return score
+}
+
+function dedupeLocalizedEntries(
+  entries: DictionaryEntry[],
+  preferences: Record<string, string>,
+): DictionaryEntry[] {
+  const byLemma = new Map<string, DictionaryEntry[]>()
+  for (const entry of entries) {
+    const list = byLemma.get(entry.lemma) ?? []
+    list.push(entry)
+    byLemma.set(entry.lemma, list)
+  }
+
+  const out: DictionaryEntry[] = []
+  for (const [lemma, group] of byLemma) {
+    if (group.length === 1) {
+      out.push(group[0]!)
+      continue
+    }
+
+    const byWord = new Map<string, DictionaryEntry[]>()
+    for (const entry of group) {
+      const key = normalizeLemma(entry.word)
+      const list = byWord.get(key) ?? []
+      list.push(entry)
+      byWord.set(key, list)
+    }
+
+    for (const [, wordGroup] of byWord) {
+      if (wordGroup.length === 1) {
+        out.push(wordGroup[0]!)
+        continue
+      }
+      const preferred = preferences[lemma]
+      const chosen =
+        preferred && wordGroup.some((e) => e.signId === preferred)
+          ? preferred
+          : wordGroup.reduce((best, cur) =>
+              scoreLocalizedEntry(cur) > scoreLocalizedEntry(best) ? cur : best,
+            ).signId
+      out.push(wordGroup.find((e) => e.signId === chosen) ?? wordGroup[0]!)
+    }
+  }
+  return out
+}
+
 function localizeFrenchEntries(
   frEntries: DictionaryEntry[],
   lang: Exclude<Lang, 'fr'>,
@@ -149,8 +207,10 @@ function localizeFrenchEntries(
   const signIdsByLemma = new Map<string, Set<string>>()
 
   for (const entry of frEntries) {
-    const word = translateFrDictionarySense(entry.word, entry.lemma, lang, entry.signId)
+    const word = translateFrDictionarySense(entry.word, entry.lemma, lang, entry.signId).trim()
+    if (!word) continue
     const lemma = normalizeLemma(word)
+    if (!lemma) continue
     // Clé unique : évite de fusionner deux sens FR distincts (ex. vieux / vieillir → old)
     const senseKey = `${lemma}@${entry.signId}#${entry.lemma}`
     entries.push({
@@ -165,7 +225,7 @@ function localizeFrenchEntries(
     signIdsByLemma.set(lemma, set)
   }
 
-  let result = entries
+  let result = dedupeLocalizedEntries(entries, preferences)
 
   if (Object.keys(preferences).length > 0) {
     const preferredSignByLemma = new Map<string, string>()
@@ -174,10 +234,10 @@ function localizeFrenchEntries(
       if (preferred && signIdSet.has(preferred)) preferredSignByLemma.set(lemma, preferred)
     }
     if (preferredSignByLemma.size > 0) {
-      result = entries.filter((entry) => {
+      result = result.filter((entry) => {
         const preferred = preferredSignByLemma.get(entry.lemma)
         if (!preferred) return true
-        const sameLemma = entries.filter((e) => e.lemma === entry.lemma)
+        const sameLemma = result.filter((e) => e.lemma === entry.lemma)
         if (sameLemma.length <= 1) return true
         return entry.signId === preferred
       })

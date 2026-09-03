@@ -136,6 +136,121 @@ const SEMANTIC_SINGLE_BY_BASE: Record<string, Record<Lang, string>> = {
     tr: 'Lütfen',
     pl: 'Proszę',
   },
+  // Domaine informatique / réseau — un sens global, pas « bilgisayar » partout
+  configuration_informatique: {
+    fr: 'Configuration informatique',
+    en: 'Computer setup',
+    tr: 'Bilgisayar kurulumu',
+    pl: 'Konfiguracja komputera',
+  },
+  configuration_parametre_de_ls: {
+    fr: 'Configuration / parametre',
+    en: 'Settings',
+    tr: 'Ayarlar',
+    pl: 'Ustawienia',
+  },
+  licence_informatique: {
+    fr: 'Licence informatique',
+    en: 'Software license',
+    tr: 'Yazılım lisansı',
+    pl: 'Licencja oprogramowania',
+  },
+  pilote_informatique: {
+    fr: 'Pilote informatique',
+    en: 'Driver',
+    tr: 'Sürücü',
+    pl: 'Sterownik',
+  },
+  reseau_informatique: {
+    fr: 'Reseau informatique',
+    en: 'Computer network',
+    tr: 'Bilgisayar ağı',
+    pl: 'Sieć komputerowa',
+  },
+  reseau_social: {
+    fr: 'Reseau social',
+    en: 'Social network',
+    tr: 'Sosyal ağ',
+    pl: 'Sieć społecznościowa',
+  },
+  serveur_informatique: {
+    fr: 'Serveur informatique',
+    en: 'Server',
+    tr: 'Sunucu',
+    pl: 'Serwer',
+  },
+  serveur_restaurant_ou_cafe: {
+    fr: 'Serveur',
+    en: 'Waiter',
+    tr: 'Garson',
+    pl: 'Kelner',
+  },
+  ordinateur_portable: {
+    fr: 'Ordinateur portable',
+    en: 'Laptop',
+    tr: 'Dizüstü bilgisayar',
+    pl: 'Laptop',
+  },
+  hockey_sur_glace: {
+    fr: 'Hockey sur glace',
+    en: 'Ice hockey',
+    tr: 'Buz hokeyi',
+    pl: 'Hokej na lodzie',
+  },
+  hockey_sur_gazon: {
+    fr: 'Hockey sur gazon',
+    en: 'Field hockey',
+    tr: 'Çim hokeyi',
+    pl: 'Hokej na trawie',
+  },
+  dans_interieur_parmi: {
+    fr: 'Dans / interieur / parmi',
+    en: 'Inside / among',
+    tr: 'İçinde / arasında',
+    pl: 'Wewnątrz / wśród',
+  },
+  en_presentiel_face_a: {
+    fr: 'En presentiel',
+    en: 'In person',
+    tr: 'Yüz yüze',
+    pl: 'Na żywo',
+  },
+  en_face_l_un_de_l_autre_face_a_face: {
+    fr: 'Face a face',
+    en: 'Face to face',
+    tr: 'Yüz yüze',
+    pl: 'Twarzą w twarz',
+  },
+  se_lever_3_se_reveiller_2: {
+    fr: 'Se lever / se reveiller',
+    en: 'Get up / wake up',
+    tr: 'Kalkmak / uyanmak',
+    pl: 'Wstać / obudzić się',
+  },
+  circulation_dans_les_deux_sens_2: {
+    fr: 'Circulation dans les deux sens',
+    en: 'Two-way traffic',
+    tr: 'Çift yönlü trafik',
+    pl: 'Ruch dwukierunkowy',
+  },
+  parler_dans_le_dos: {
+    fr: 'Parler dans le dos',
+    en: 'Talk behind someone\'s back',
+    tr: 'Arkasından konuşmak',
+    pl: 'Mówić za plecami',
+  },
+  s_rsquo_evanouir_tomber_dans_les_pommes: {
+    fr: 'S\'evanouir / tomber dans les pommes',
+    en: 'Faint',
+    tr: 'Bayılmak',
+    pl: 'Zemdleć',
+  },
+  partout_sur_le_corps: {
+    fr: 'Partout sur le corps',
+    en: 'All over the body',
+    tr: 'Vücudun her yerinde',
+    pl: 'Po całym ciele',
+  },
 }
 
 /** Temps grammaticaux — termes linguistiques, pas la glose machine. */
@@ -260,6 +375,36 @@ const SEMANTIC_SYNONYM_LISTS: Record<string, Record<Lang, string[]>> = {
     en: ['Stroll', 'Walk'],
     tr: ['Gezinmek', 'Yürümek'],
     pl: ['Przechadzać się', 'Spacerować'],
+  },
+  informatique_ordinateur: {
+    fr: ['Informatique', 'Ordinateur'],
+    en: ['Computing', 'Computer'],
+    tr: ['Bilişim', 'Bilgisayar'],
+    pl: ['Informatyka', 'Komputer'],
+  },
+  pilote_d_rsquo_avion: {
+    fr: ['Pilote', 'Avion'],
+    en: ['Pilot', 'Airplane'],
+    tr: ['Pilot', 'Uçak'],
+    pl: ['Pilot', 'Samolot'],
+  },
+  d_accord: {
+    fr: ["D'accord"],
+    en: ['OK / Agreed'],
+    tr: ['Tamam'],
+    pl: ['Zgoda'],
+  },
+  patins_a_glace_patins_a_roulettes_1: {
+    fr: ['Patins a glace', 'Patins a roulettes'],
+    en: ['Ice skates', 'Roller skates'],
+    tr: ['Buz pateni', 'Tekerlekli paten'],
+    pl: ['Łyżwy', 'Wrotki'],
+  },
+  proteger_quelqu_rsquo_un_d_rsquo_autre: {
+    fr: ["Proteger quelqu'un", "D'autre"],
+    en: ['Protect someone', 'Someone else'],
+    tr: ['Birini korumak', 'Başka biri'],
+    pl: ['Chronić kogoś', 'Ktoś inny'],
   },
 }
 
@@ -887,8 +1032,31 @@ function isBareCliticParticle(word: string): boolean {
   return false
 }
 
+/** Prépositions / mots-outils orphelins extraits d’un composé (ex. « sur » dans hockey_sur_glace). */
+const ORPHAN_FUNCTION_WORDS = new Set([
+  'sur', 'dans', 'en', 'de', 'du', 'des', 'a', 'au', 'aux', 'par', 'pour', 'avec', 'sans',
+  'chez', 'entre', 'parmi', 'sous', 'vers', 'et', 'ou', 'que', 'qui', 'ne', 'pas',
+  'le', 'la', 'les', 'un', 'une', 'ce', 'cette', 'ces', 'se', 'y', 'd', 'l',
+])
+
+function isOrphanFunctionWord(word: string, signId: string): boolean {
+  const n = normalizeToken(word)
+  if (!ORPHAN_FUNCTION_WORDS.has(n)) return false
+  const parts = signIdBaseParts(signId).filter((p) => !/^\d+$/.test(p) && normalizeToken(p) !== 'rsquo')
+  if (parts.length <= 1) return false
+  const head = normalizeToken(parts[0] ?? '')
+  // garder le signe dédié (sur_1, dans_… court) si la tête EST le mot-outil
+  if (parts.length <= 2 && (head === n || head === `d ${n}` || head === `l ${n}`)) return false
+  return true
+}
+
 function filterDictionarySenses(senses: DictionarySense[], signId: string): DictionarySense[] {
-  return senses.filter((s) => !isDictionaryNoiseDigit(s.word, signId) && !isBareCliticParticle(s.word))
+  return senses.filter(
+    (s) =>
+      !isDictionaryNoiseDigit(s.word, signId) &&
+      !isBareCliticParticle(s.word) &&
+      !isOrphanFunctionWord(s.word, signId),
+  )
 }
 
 function stripTrailingVariantSuffix(tokens: string[], signId: string): string[] {

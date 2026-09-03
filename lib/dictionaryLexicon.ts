@@ -67,9 +67,18 @@ const CURATED: Record<Lang, Record<string, string>> = {
     'turbo': 'Turbo', 'vite': 'Quickly',
     'anniversaire': 'Birthday', 'heure': 'Hour', 'heures': 'Hours',
     'vieillir': 'Grow old', 'vieux': 'Old', 'aile': 'Wing', 'voler': 'Fly', 'oiseau': 'Bird',
-    'a mon': 'My', 'a son': 'His/her', 'a ton': 'Your', 'a heures': 'O\'clock',
+    'a mon': 'My', 'a son': 'His/her', 'a ton': 'Your', 'a heures': "O'clock",
     'afin': 'In order to', 'ainsi': 'Thus', 'agathe': 'Agathe', 'addition': 'Addition',
     'accident vasculaire': 'Stroke', 'accoucher': 'Give birth', 'abattoir': 'Slaughterhouse',
+    // Domaine IT / prépositions — sémantique, pas calque
+    informatique: 'Computing', ordinateur: 'Computer', configuration: 'Settings',
+    licence: 'License', pilote: 'Pilot', reseau: 'Network', serveur: 'Server',
+    social: 'Social', restaurant: 'Restaurant', cafe: 'Cafe', avion: 'Airplane',
+    sur: 'On', dans: 'In', presentiel: 'In person', etre: 'To be', circulation: 'Traffic',
+    beaucoup: 'A lot', grand: 'Big', ouvrir: 'Open', cheveux: 'Hair',
+    meilleur: 'Best', efficace: 'Effective', d: "D'",
+    verser: 'To pour', fils: 'Son', ceinture: 'Belt',
+    hasard: 'Chance', coincidence: 'Coincidence',
   },
   tr: {
     'a bout': 'Bitkin', 'a cote': 'Yanında', 'a fond': 'Tamamen', 'a part ca': 'Bunun dışında',
@@ -83,6 +92,13 @@ const CURATED: Record<Lang, Record<string, string>> = {
     'tres': 'Çok', 'zero': 'Sıfır', 'depecher': 'Acele etmek', 'fort': 'Güçlü', 'rapide': 'Hızlı',
     'turbo': 'Turbo', 'vite': 'Çabuk', 'vieillir': 'Yaşlanmak', 'vieux': 'Yaşlı',
     'anniversaire': 'Doğum günü', 'heure': 'Saat', 'heures': 'Saat',
+    informatique: 'Bilişim', ordinateur: 'Bilgisayar', configuration: 'Yapılandırma',
+    licence: 'Lisans', pilote: 'Pilot', reseau: 'Ağ', serveur: 'Sunucu',
+    social: 'Sosyal', restaurant: 'Restoran', cafe: 'Kafe', avion: 'Uçak',
+    sur: 'Üzerinde', dans: 'İçinde', presentiel: 'Yüz yüze', etre: 'Olmak', circulation: 'Trafik',
+    beaucoup: 'Çok', grand: 'Büyük', ouvrir: 'Açmak', cheveux: 'Saç',
+    meilleur: 'En iyi', efficace: 'Etkili',
+    verser: 'Dökmek', fils: 'Oğul', ceinture: 'Kemer',
   },
   pl: {
     'a bout': 'Wyczerpany', 'a cote': 'Obok', 'a fond': 'Dogłębnie', 'a part ca': 'Poza tym',
@@ -96,6 +112,13 @@ const CURATED: Record<Lang, Record<string, string>> = {
     'tres': 'Bardzo', 'zero': 'Zero', 'depecher': 'Śpieszyć się', 'fort': 'Silny', 'rapide': 'Szybki',
     'turbo': 'Turbo', 'vite': 'Szybko', 'vieillir': 'Starzeć się', 'vieux': 'Stary',
     'anniversaire': 'Urodziny', 'heure': 'Godzina', 'heures': 'Godziny',
+    informatique: 'Informatyka', ordinateur: 'Komputer', configuration: 'Konfiguracja',
+    licence: 'Licencja', pilote: 'Pilot', reseau: 'Sieć', serveur: 'Serwer',
+    social: 'Społecznościowy', restaurant: 'Restauracja', cafe: 'Kawiarnia', avion: 'Samolot',
+    sur: 'Na', dans: 'W', presentiel: 'Na żywo', etre: 'Być', circulation: 'Ruch',
+    beaucoup: 'Dużo', grand: 'Duży', ouvrir: 'Otwierać', cheveux: 'Włosy',
+    meilleur: 'Najlepszy', efficace: 'Skuteczny',
+    verser: 'Lać', fils: 'Syn', ceinture: 'Pasek',
   },
 }
 
@@ -106,6 +129,12 @@ const LABELS: Record<Exclude<Lang, 'fr'>, Record<string, string>> = {
 }
 
 const cache: Partial<Record<Exclude<Lang, 'fr'>, Lexicon>> = {}
+
+const FR_LEFTOVER_FORMS = new Set([
+  'dans', 'en', 'et', 'etre', 'être', 'pas', 'que', 'qui', 'le', 'la', 'les', 'un', 'une',
+  'de', 'du', 'des', 'au', 'aux', 'ne', 'se', 'ce', 'cette', 'ces', 'son', 'pour', 'a', 'à',
+  'y', 'ou', 'par', 'sur', 'avec', 'sans', 'parmi', 'presentiel', 'présentiel', 'd', "d'",
+])
 
 function capitalizeDisplay(text: string): string {
   const t = text.trim()
@@ -146,7 +175,7 @@ function buildLexicon(lang: Exclude<Lang, 'fr'>): Lexicon {
     if (!map.has(lemma)) map.set(lemma, word)
   }
   for (const [lemma, word] of Object.entries(GENERATED[lang] ?? {})) {
-    if (!map.has(lemma) && word) map.set(lemma, word)
+    if (!map.has(lemma) && word && !isGarbageTranslation(word)) map.set(lemma, word)
   }
 
   for (const [id, frLabel] of Object.entries(SIGN_LABELS_FR)) {
@@ -156,7 +185,7 @@ function buildLexicon(lang: Exclude<Lang, 'fr'>): Lexicon {
 
     if (frSenses.length === 1) {
       const lemma = frSenses[0]!.lemma
-      if (!map.has(lemma)) map.set(lemma, tLabel.trim())
+      if (!map.has(lemma) && !isGarbageTranslation(tLabel)) map.set(lemma, tLabel.trim())
       continue
     }
 
@@ -164,7 +193,8 @@ function buildLexicon(lang: Exclude<Lang, 'fr'>): Lexicon {
     if (tSenses.length === frSenses.length) {
       for (let i = 0; i < frSenses.length; i++) {
         const lemma = frSenses[i]!.lemma
-        if (!map.has(lemma)) map.set(lemma, tSenses[i]!.word)
+        const word = tSenses[i]!.word
+        if (!map.has(lemma) && !isGarbageTranslation(word)) map.set(lemma, word)
       }
       continue
     }
@@ -173,7 +203,8 @@ function buildLexicon(lang: Exclude<Lang, 'fr'>): Lexicon {
     if (tokens.length === frSenses.length) {
       for (let i = 0; i < frSenses.length; i++) {
         const lemma = frSenses[i]!.lemma
-        if (!map.has(lemma)) map.set(lemma, capitalizeDisplay(tokens[i]!))
+        const word = tokens[i]!
+        if (!map.has(lemma) && !isBadZipFragment(lemma, word)) map.set(lemma, capitalizeDisplay(word))
       }
     }
   }
@@ -181,9 +212,40 @@ function buildLexicon(lang: Exclude<Lang, 'fr'>): Lexicon {
   return map
 }
 
+function isGarbageTranslation(value: string): boolean {
+  return /veuillez|indiquer deux langues|&#\d+/i.test(value.trim())
+}
+
+/** Fragments de zip mot-à-mot (ex. « Etkili en iyi » → meilleur=en). */
+function isBadZipFragment(frLemma: string, value: string): boolean {
+  const v = value.trim()
+  if (!v || isGarbageTranslation(v)) return true
+  const vl = normalizeLemma(v)
+  if (
+    FR_LEFTOVER_FORMS.has(vl) &&
+    !FR_LEFTOVER_FORMS.has(frLemma) &&
+    !/\s/.test(v) &&
+    v.length <= 3
+  ) {
+    return true
+  }
+  return false
+}
+
 export function getDictionaryLexicon(lang: Exclude<Lang, 'fr'>): Lexicon {
   if (!cache[lang]) cache[lang] = buildLexicon(lang)
   return cache[lang]!
+}
+
+function isUntranslatedFrenchLeftover(word: string, frWord: string): boolean {
+  const w = word.trim()
+  if (!w) return true
+  if (/veuillez|indiquer deux langues|&#\d+|residential&#/i.test(w)) return true
+  const lemma = normalizeLemma(w)
+  if (FR_LEFTOVER_FORMS.has(lemma) && normalizeLemma(w) === normalizeLemma(frWord)) return true
+  // Forme française inchangée pour un mot-outil
+  if (FR_LEFTOVER_FORMS.has(lemma) && /[éèêëàâùûüôöîïç]/i.test(w)) return true
+  return false
 }
 
 /**
@@ -200,7 +262,7 @@ export function translateFrDictionarySense(
 
   if (signId) {
     const semantic = semanticTranslationForSense(signId, frWord, frLemma, lang)
-    if (semantic) return semantic
+    if (semantic && !isUntranslatedFrenchLeftover(semantic, frWord)) return semantic
   }
 
   const numeric = translateNumericLemma(frLemma, lang)
@@ -208,7 +270,10 @@ export function translateFrDictionarySense(
 
   const lex = getDictionaryLexicon(lang)
   const hit = lex.get(frLemma)
-  if (hit) return capitalizeDisplay(hit)
+  if (hit) {
+    const display = capitalizeDisplay(hit)
+    if (!isUntranslatedFrenchLeftover(display, frWord)) return display
+  }
 
   // Acronymes / noms propres internationaux : on garde la forme
   if (
@@ -218,6 +283,11 @@ export function translateFrDictionarySense(
     (/^[a-z]{2,4}$/i.test(frLemma) && frLemma === frLemma.toLowerCase() && !/[aeiouy]{3}/i.test(frLemma))
   ) {
     return capitalizeDisplay(frWord)
+  }
+
+  // Ne pas laisser un mot-outil FR tel quel dans EN/TR/PL
+  if (FR_LEFTOVER_FORMS.has(frLemma) || FR_LEFTOVER_FORMS.has(normalizeLemma(frWord))) {
+    return ''
   }
 
   return capitalizeDisplay(frWord)
