@@ -336,7 +336,12 @@ export function translateFrDictionarySense(
     }
   }
 
+  // Noms de personnes / marques : préférer le label cible s’il existe
   if (looksLikePersonOrBrandName(frWord)) {
+    if (signId) {
+      const fallback = targetLabelFallback(signId, lang)
+      if (fallback) return fallback
+    }
     return frWord
   }
 

@@ -12,7 +12,7 @@ export type DictionaryEntry = {
 import { DICTIONARY_PREFERRED_SIGN } from './dictionaryPreferences'
 import { DISABLED_SIGNS } from './disabledSigns'
 import { isResidualFrenchDisplay, translateFrDictionarySense } from './dictionaryLexicon'
-import { SIGN_LABELS_FR } from './signLabels'
+import { SIGN_LABELS_EN, SIGN_LABELS_FR, SIGN_LABELS_PL, SIGN_LABELS_TR } from './signLabels'
 import {
   areSynonymSigns,
   clusterSynonymSigns,
@@ -20,6 +20,12 @@ import {
   splitSignId,
   normalizeLemma,
 } from './dictionarySemantics'
+
+const TARGET_LABELS: Record<Exclude<Lang, 'fr'>, Record<string, string>> = {
+  en: SIGN_LABELS_EN,
+  tr: SIGN_LABELS_TR,
+  pl: SIGN_LABELS_PL,
+}
 
 export {
   extractDictionarySenses,
@@ -206,27 +212,78 @@ function localizeFrenchEntries(
   lang: Exclude<Lang, 'fr'>,
   preferences: Record<string, string>,
 ): DictionaryEntry[] {
+  const bySign = new Map<string, DictionaryEntry[]>()
+  for (const entry of frEntries) {
+    const list = bySign.get(entry.signId) ?? []
+    list.push(entry)
+    bySign.set(entry.signId, list)
+  }
+
   const entries: DictionaryEntry[] = []
   const signIdsByLemma = new Map<string, Set<string>>()
 
-  for (const entry of frEntries) {
-    const word = translateFrDictionarySense(entry.word, entry.lemma, lang, entry.signId).trim()
-    if (!word) continue
-    if (isResidualFrenchDisplay(word, lang)) continue
-    const lemma = normalizeLemma(word)
-    if (!lemma) continue
-    // Clé unique : évite de fusionner deux sens FR distincts (ex. vieux / vieillir → old)
-    const senseKey = `${lemma}@${entry.signId}#${entry.lemma}`
+  const pushEntry = (word: string, signId: string, frLemma: string) => {
+    const trimmed = word.trim()
+    if (!trimmed) return
+    if (isResidualFrenchDisplay(trimmed, lang)) return
+    const lemma = normalizeLemma(trimmed)
+    if (!lemma) return
     entries.push({
-      word,
+      word: trimmed,
       lemma,
       normalized: lemma,
-      senseKey,
-      signId: entry.signId,
+      senseKey: `${lemma}@${signId}#${frLemma}`,
+      signId,
     })
     const set = signIdsByLemma.get(lemma) ?? new Set()
-    set.add(entry.signId)
+    set.add(signId)
     signIdsByLemma.set(lemma, set)
+  }
+
+  for (const [signId, frSenses] of bySign) {
+    const translated = frSenses.map((entry) => {
+      const word = translateFrDictionarySense(entry.word, entry.lemma, lang, entry.signId).trim()
+      const ok =
+        !!word &&
+        !isResidualFrenchDisplay(word, lang) &&
+        normalizeLemma(word) !== normalizeLemma(entry.word)
+      return { entry, word, ok }
+    })
+    const good = translated.filter((t) => t.ok)
+    const untranslated = translated.length - good.length
+
+    const targetLabel = TARGET_LABELS[lang][signId]
+    let usedTargetLabel = false
+    if (
+      targetLabel &&
+      untranslated > 0 &&
+      (good.length === 0 || untranslated >= Math.ceil(frSenses.length / 2))
+    ) {
+      const targetSenses = extractDictionarySenses(signId, targetLabel, lang)
+      const usable = targetSenses.filter(
+        (s) => s.word.trim() && !isResidualFrenchDisplay(s.word, lang),
+      )
+      if (usable.length > 0) {
+        usedTargetLabel = true
+        for (const sense of usable) {
+          pushEntry(sense.word, signId, sense.lemma)
+        }
+      }
+    }
+
+    if (!usedTargetLabel) {
+      for (const t of good) {
+        pushEntry(t.word, signId, t.entry.lemma)
+      }
+      // Sens isolés bien traduits même si d’autres ont échoué
+      if (good.length === 0) {
+        for (const t of translated) {
+          if (t.word && !isResidualFrenchDisplay(t.word, lang)) {
+            pushEntry(t.word, signId, t.entry.lemma)
+          }
+        }
+      }
+    }
   }
 
   let result = dedupeLocalizedEntries(entries, preferences)

@@ -111,9 +111,10 @@ export default function DictionnaireView() {
     }
   }, [dictionaryLang])
 
-  // Construction différée + cache module : l’UI reste réactive au changement de langue
+  // Construction différée + cache : ne jamais afficher une autre langue en attendant
   useEffect(() => {
     let cancelled = false
+    setAllSigns([])
     const build = () => {
       const entries = buildDictionaryEntries(labelsMap, dictionaryLang, preferences)
       if (!cancelled) {
