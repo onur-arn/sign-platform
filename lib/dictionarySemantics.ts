@@ -282,6 +282,54 @@ function extractSemanticSynonymListSenses(
   return sensesFromWords(signId, words)
 }
 
+/** Traduction sémantique d’un sens FR pour une langue cible (maps dédiées). */
+export function semanticTranslationForSense(
+  signId: string,
+  frWord: string,
+  frLemma: string,
+  lang: Lang,
+): string | null {
+  if (lang === 'fr') return frWord
+  const base = signId.replace(/_\d+$/, '')
+
+  const place = matchCompoundPlaceParts(base.split('_').filter(Boolean), lang)
+  if (place) {
+    const frPlace = matchCompoundPlaceParts(base.split('_').filter(Boolean), 'fr')
+    if (frPlace && normalizeLemma(frPlace.display) === frLemma) return place.display
+  }
+
+  const single = SEMANTIC_SINGLE_BY_BASE[base]
+  if (single) {
+    const frDisplay = single.fr
+    if (normalizeLemma(frDisplay) === frLemma || normalizeLemma(frWord) === normalizeLemma(frDisplay)) {
+      return single[lang] ?? single.fr
+    }
+  }
+
+  if (/^s_rsquo_il_vous_plait/.test(base)) {
+    return SEMANTIC_SINGLE_BY_BASE.s_rsquo_il_vous_plait_svp?.[lang] ?? null
+  }
+
+  if (signId.endsWith('_temps_de_l_indicatif')) {
+    const tenseId = signId.slice(0, -'_temps_de_l_indicatif'.length)
+    return GRAMMAR_TENSE_BY_LANG[tenseId]?.[lang] ?? null
+  }
+
+  const lists = SEMANTIC_SYNONYM_LISTS[signId] ?? SEMANTIC_SYNONYM_LISTS[base]
+  if (lists) {
+    const frList = lists.fr
+    const idx = frList.findIndex(
+      (w) => normalizeLemma(w) === frLemma || normalizeLemma(w) === normalizeLemma(frWord),
+    )
+    if (idx >= 0) {
+      const localized = lists[lang] ?? lists.fr
+      return localized[idx] ?? null
+    }
+  }
+
+  return null
+}
+
 /** Suffixes pays multi-mots en fin de sign_id (du plus long au plus court). */
 const GEO_MULTI_COUNTRY_TAILS: string[][] = [
   ['emirats', 'arabes', 'unis'],

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { SIGN_COUNT } from '@/lib/signCount'
+import { SIGN_COUNT_LABEL } from '@/lib/signCount'
 import { displayParts } from '@/lib/userName'
 import AdminDictionaryDuplicatesView from '@/components/views/AdminDictionaryDuplicatesView'
 
@@ -31,7 +31,7 @@ export default function AdminPanelView() {
   const { t, language } = useLanguage()
   const [section, setSection] = useState<AdminSection>('users')
   const [users, setUsers] = useState<UserRow[]>([])
-  const [signsCount, setSignsCount] = useState(SIGN_COUNT)
+  const [signsCount, setSignsCount] = useState(SIGN_COUNT_LABEL)
   const [protectedEmail, setProtectedEmail] = useState<string | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -60,7 +60,7 @@ export default function AdminPanelView() {
       }
       const data = await res.json()
       setUsers(data.users ?? [])
-      if (typeof data.signsCount === 'number') setSignsCount(data.signsCount)
+      setSignsCount(SIGN_COUNT_LABEL)
       setProtectedEmail(data.protectedAdminEmail ?? null)
       setLastUpdate(new Date())
       setError(null)

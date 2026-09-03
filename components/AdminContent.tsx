@@ -8,9 +8,7 @@ import { useDarkMode } from '@/contexts/DarkModeContext';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import LanguageSelector from '@/components/LanguageSelector';
 import SignDictionary from '@/components/SignDictionary';
-import { SIGN_LABELS_FR } from '@/lib/signLabels';
-
-const SIGNS_COUNT = Object.keys(SIGN_LABELS_FR).length;
+import { SIGN_COUNT_LABEL } from '@/lib/signCount';
 
 interface User {
   id: string;
@@ -139,7 +137,7 @@ export default function AdminContent(initial: AdminContentProps) {
                   <p className="text-sm font-semibold" style={{ color: textSub }}>
                     {t.admin.availableWords}
                   </p>
-                  <p className="text-4xl font-bold mt-2" style={{ color: textMain }}>{SIGNS_COUNT}</p>
+                  <p className="text-4xl font-bold mt-2" style={{ color: textMain }}>{SIGN_COUNT_LABEL}</p>
                 </div>
                 <div className="text-5xl">🤟</div>
               </div>

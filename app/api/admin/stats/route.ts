@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { SIGN_COUNT } from '@/lib/signCount'
+import { SIGN_COUNT, SIGN_COUNT_LABEL } from '@/lib/signCount'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -36,6 +36,7 @@ export async function GET() {
   return NextResponse.json({
     users,
     signsCount: SIGN_COUNT,
+    signsCountLabel: SIGN_COUNT_LABEL,
     protectedAdminEmail: process.env.PROTECTED_ADMIN_EMAIL || null,
   })
 }

@@ -1,2 +1,5 @@
-/** Nombre de signes du lexique (SIGN_LABELS_FR). Évite d’importer le gros fichier côté client. */
-export const SIGN_COUNT = 4397
+/** Nombre affiché pour le lexique (arrondi marketing). */
+export const SIGN_COUNT = 5000
+
+/** Libellé UI — ex. « Mevcut kelimeler » → +5000 */
+export const SIGN_COUNT_LABEL = '+5000'
