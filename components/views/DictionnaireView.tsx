@@ -22,7 +22,17 @@ const SignAvatarPlayer = dynamic(() => import('@/components/avatar/SignAvatarPla
   loading: () => <AvatarChunkFallback />,
 })
 
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+const ALPHABET_LATIN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+/** Alphabet polonais (avec Q/V/X pour les emprunts). */
+const ALPHABET_PL = 'AĄBCĆDEĘFGHIJKLŁMNŃOÓPQRSŚTUVWXYZŹŻ'.split('')
+/** Alphabet turc. */
+const ALPHABET_TR = 'ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ'.split('')
+
+function alphabetForLang(lang: string): string[] {
+  if (lang === 'pl') return ALPHABET_PL
+  if (lang === 'tr') return ALPHABET_TR
+  return ALPHABET_LATIN
+}
 
 function removeAccents(str: string) {
   return str
@@ -32,10 +42,26 @@ function removeAccents(str: string) {
     .replace(/İ/g, 'I')
 }
 
-/** Première lettre de section (ignore guillemets / apostrophes en tête). */
-function dictionarySection(entry: { word: string; signId: string }) {
+/** Première lettre de section selon la langue (PL/TR : lettres spécifiques). */
+function dictionarySection(entry: { word: string; signId: string }, lang: string) {
   if (isNumericExpression(entry.signId, entry.word)) return '#'
   const cleaned = entry.word.trim().replace(/^[\s"'«»„‟‘’‚‛`´]+/u, '')
+  if (!cleaned) return '#'
+
+  if (lang === 'pl') {
+    const c = cleaned[0]!.toLocaleUpperCase('pl-PL')
+    if (ALPHABET_PL.includes(c)) return c
+    const ascii = removeAccents(c)
+    return /[A-Z]/.test(ascii) ? ascii : '#'
+  }
+
+  if (lang === 'tr') {
+    const c = cleaned[0]!.toLocaleUpperCase('tr-TR')
+    if (ALPHABET_TR.includes(c)) return c
+    const ascii = removeAccents(c)
+    return /[A-Z]/.test(ascii) ? ascii : '#'
+  }
+
   const c = removeAccents(cleaned.toLocaleUpperCase('en-US'))[0] ?? '#'
   return /[A-Z]/.test(c) ? c : '#'
 }
@@ -81,14 +107,22 @@ export default function DictionnaireView() {
     [labelsMap, dictionaryLang, preferences, prefsReady],
   )
 
+  const alphabet = useMemo(() => alphabetForLang(dictionaryLang), [dictionaryLang])
+
+  useEffect(() => {
+    if (activeLetter !== 'ALL' && activeLetter !== '#' && !alphabet.includes(activeLetter)) {
+      setActiveLetter(alphabet[0] ?? 'A')
+    }
+  }, [alphabet, activeLetter])
+
   const displayed = useMemo(() => {
     if (search.trim()) {
       const q = removeAccents(search.trim().toLowerCase())
       return allSigns.filter((s) => s.normalized.includes(q) || removeAccents(s.word.toLowerCase()).includes(q))
     }
     if (activeLetter === 'ALL') return allSigns
-    return allSigns.filter((s) => dictionarySection(s) === activeLetter)
-  }, [allSigns, activeLetter, search])
+    return allSigns.filter((s) => dictionarySection(s, dictionaryLang) === activeLetter)
+  }, [allSigns, activeLetter, search, dictionaryLang])
 
   const handleLetter = useCallback((letter: string) => {
     setActiveLetter(letter)
@@ -119,7 +153,7 @@ export default function DictionnaireView() {
             >
               {t.admin.dictionaryAll}
             </button>
-            {ALPHABET.map((l) => (
+            {alphabet.map((l) => (
               <button
                 key={l}
                 type="button"

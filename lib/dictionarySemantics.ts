@@ -680,7 +680,6 @@ const FR_COMMON_VOCABULARY = new Set([
   'accrocher', 'portemanteau', 'ah', 'ettonne', 'surprise', 'emotion', 'alphabet', 'dactylologie',
   'epeler', 'applaudir', 'bravo', 'felicitations', 'appareil', 'photo', 'photographie', 'an', 'age',
   'ans', 'annee', 'apres', 'periode', 'arete', 'os', 'astronomie', 'telescope', 'atelier', 'activite',
-  'dresse', 'dresser',
 ])
 
 function isNameLikeToken(token: string): boolean {
@@ -714,6 +713,8 @@ function isAbbreviationSynonymPair(parts: string[]): boolean {
 const FR_FALSE_INFINITIVES = new Set([
   'autre', 'notre', 'votre', 'centre', 'titre', 'lettre', 'fenetre', 'coffre', 'ordre', 'cadre', 'genre',
   'arbre', 'sucre', 'beurre', 'poivre', 'verre', 'pierre', 'guerre', 'terre',
+  // Noms propres / patronymes en -er
+  'hitler', 'foster', 'wagner', 'miller', 'baker', 'turner', 'parker', 'carter', 'cooper',
 ])
 
 /** Infinitif français (ex. echouer, gronder, rater). */
@@ -764,7 +765,14 @@ function isProperNameSign(
   if (isUnpunctuatedSynonymList(signId, signTokens, content, label, lang)) return false
   if (isAbbreviationSynonymPair(parts)) return false
   if (isFlatSynonymListSign(signId, lang)) return false
-  if (parts.length === 2 && isNounInfinitiveSynonymPair(parts[0]!, parts[1]!, lang)) return false
+  // « Adolf + Hitler » : -er ≠ infinitif si les deux tokens sont des noms propres
+  if (
+    parts.length === 2 &&
+    isNounInfinitiveSynonymPair(parts[0]!, parts[1]!, lang) &&
+    !(isNameLikeToken(parts[0]!) && isNameLikeToken(parts[1]!))
+  ) {
+    return false
+  }
 
   if (parts.length >= 2 && parts.length <= 4) {
     return parts.every(isNameLikeToken)
@@ -778,7 +786,13 @@ function extractProperNameSenses(signId: string, label: string, lang: Lang): Dic
   const content = contentTokens(signTokens, lang, signId)
   if (!isProperNameSign(signId, signTokens, content, label, lang)) return null
 
-  const display = formatPhraseDisplay(label.trim())
+  // Capitaliser chaque segment du nom (Adolf Hitler, non « Adolf hitler »)
+  const display = label
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((w) => capitalizeWord(w))
+    .join(' ')
   const lemma = normalizeToken(display)
   return [{ word: display, lemma, senseKey: `${lemma}@${signId}`, signId }]
 }
@@ -2236,6 +2250,18 @@ function isFlatSynonymListSign(signId: string, lang: Lang): boolean {
     const second = normalizeToken(segments[1]!.split(/\s+/)[0]!)
     if (FR_SPECIFIER_NOUNS.has(second) && !FR_SPECIFIER_NOUNS.has(first)) return false
     if (isTwoTokenPhrase(segments[0]!, segments[1]!, lang)) return false
+    // Prénoms / noms de personnes ou marques : garder ensemble (Adolf Hitler, Albert Einstein…)
+    // Avant le test « nom + infinitif » : Hitler finit en -er mais n'est pas un verbe.
+    if (
+      segments.every((seg) =>
+        seg
+          .split(/\s+/)
+          .filter(Boolean)
+          .every((w) => isNameLikeToken(w)),
+      )
+    ) {
+      return false
+    }
     if (isNounInfinitiveSynonymPair(first, second, lang)) return true
     if (computeGeoCountryTail(signId) && !/\s/.test(segments[1]!)) return false
     return true
@@ -3347,9 +3373,10 @@ export function classifySignStructure(signId: string, label: string, lang: Lang)
     }
     return 'dedicated'
   }
+  // Noms de personnes / marques avant les listes de synonymes plates
+  if (isProperNameSign(signId, signTokens, content, trimmed, lang)) return 'phrase'
   if (isFlatSynonymListSign(signId, lang)) return 'synonym_list'
   if (isPrepositionalVerbList(signId, content, lang)) return 'synonym_list'
-  if (isProperNameSign(signId, signTokens, content, trimmed, lang)) return 'phrase'
   if (getSynonymVerbalPhraseTail(signId)) return 'synonym_list'
   if (isApartirDeSynonymSign(signId, lang)) return 'synonym_list'
   if (getMultiVerbalPhraseSegments(signId, lang)) return 'synonym_list'
@@ -3490,6 +3517,10 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
   const enCompound = extractEnLinkerCompoundSenses(signId, trimmed, lang)
   if (enCompound) return filterDictionarySenses(enCompound, signId)
 
+  // Noms de personnes / marques avant le découpage en synonymes plats
+  const properNameSenses = extractProperNameSenses(signId, trimmed, lang)
+  if (properNameSenses) return filterDictionarySenses(properNameSenses, signId)
+
   const numericDualSenses = extractNumericDualSenses(signId, trimmed, lang)
   if (numericDualSenses) return filterDictionarySenses(numericDualSenses, signId)
 
@@ -3522,9 +3553,6 @@ export function extractDictionarySenses(signId: string, label: string, lang: Lan
 
   const asblSenses = extractAsblOrganizationSenses(signId, trimmed, lang)
   if (asblSenses) return filterDictionarySenses(asblSenses, signId)
-
-  const properNameSenses = extractProperNameSenses(signId, trimmed, lang)
-  if (properNameSenses) return filterDictionarySenses(properNameSenses, signId)
 
   const verbalTailSenses = extractSynonymVerbalTailSenses(signId, trimmed, lang)
   if (verbalTailSenses) return filterDictionarySenses(verbalTailSenses, signId)

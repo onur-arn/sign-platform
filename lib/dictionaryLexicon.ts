@@ -248,6 +248,17 @@ function isUntranslatedFrenchLeftover(word: string, frWord: string): boolean {
   return false
 }
 
+/** Prénom + nom (ou marque) : on conserve la forme internationale, pas les déclinaisons (Adolfa Hitlera…). */
+function looksLikePersonOrBrandName(word: string): boolean {
+  const parts = word.trim().split(/\s+/).filter(Boolean)
+  if (parts.length < 2 || parts.length > 5) return false
+  return parts.every((p) => {
+    const n = normalizeLemma(p)
+    if (n === 'van' || n === 'von' || n === 'de' || n === 'da' || n === 'di' || n === 'del') return true
+    return /^[A-ZÀ-ŸÁĆĘŁŃÓŚŹŻİŞĞÜÖÇ]/u.test(p) && p.length >= 2
+  })
+}
+
 /**
  * Traduit un sens FR vers la langue cible en préservant le sens
  * (maps sémantiques + lexique + règles), sans calquer bêtement le label machine.
@@ -263,6 +274,11 @@ export function translateFrDictionarySense(
   if (signId) {
     const semantic = semanticTranslationForSense(signId, frWord, frLemma, lang)
     if (semantic && !isUntranslatedFrenchLeftover(semantic, frWord)) return semantic
+  }
+
+  // Noms de personnes / marques : garder la forme nominative internationale
+  if (looksLikePersonOrBrandName(frWord)) {
+    return frWord
   }
 
   const numeric = translateNumericLemma(frLemma, lang)
