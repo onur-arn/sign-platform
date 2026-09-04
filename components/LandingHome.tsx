@@ -27,13 +27,10 @@ export default function LandingHome() {
       </header>
 
       <main className="landing-hero-stage">
-        {/* key force le remount complet à chaque langue (évite textes figés) */}
-        <div className="landing-hero-copy" key={`hero-${language}`}>
-          <p className="landing-kicker landing-rise" style={{ animationDelay: '40ms' }}>
-            {badge}
-          </p>
+        <div className="landing-hero-copy">
+          <p className="landing-kicker">{badge}</p>
 
-          <h1 className="landing-brand landing-rise" style={{ animationDelay: '120ms' }}>
+          <h1 className="landing-brand">
             {hasPrefix ? (
               <>
                 <span className="landing-brand-soft">{t.hero.titlePrefix}</span>{' '}
@@ -47,11 +44,9 @@ export default function LandingHome() {
             )}
           </h1>
 
-          <p className="landing-lead landing-rise" style={{ animationDelay: '220ms' }}>
-            {t.hero.subtitle}
-          </p>
+          <p className="landing-lead">{t.hero.subtitle}</p>
 
-          <div className="landing-actions landing-rise" style={{ animationDelay: '320ms' }}>
+          <div className="landing-actions">
             {/* <a> natif : Next <Link> peut garder l’ancien libellé après changement i18n */}
             <a
               href="/register"

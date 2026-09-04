@@ -355,8 +355,14 @@ export function buildDictionaryEntries(
   return built
 }
 
-/** Préchauffe le dictionnaire (FR + langue active) hors chemin critique UI. */
-export function warmDictionaryCache(lang: Lang = 'fr'): void {
+/** Préchauffe le dictionnaire (FR + langue active, ou toutes) hors chemin critique UI. */
+export function warmDictionaryCache(lang: Lang | 'all' = 'fr'): void {
   buildDictionaryEntries(SIGN_LABELS_FR, 'fr', {})
+  if (lang === 'all') {
+    buildDictionaryEntries(SIGN_LABELS_FR, 'en', {})
+    buildDictionaryEntries(SIGN_LABELS_FR, 'tr', {})
+    buildDictionaryEntries(SIGN_LABELS_FR, 'pl', {})
+    return
+  }
   if (lang !== 'fr') buildDictionaryEntries(SIGN_LABELS_FR, lang, {})
 }

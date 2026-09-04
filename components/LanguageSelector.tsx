@@ -1,6 +1,5 @@
 'use client'
 
-import { startTransition } from 'react'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useDarkMode } from '@/contexts/DarkModeContext'
 import type { Language } from '@/lib/i18n/translations'
@@ -21,7 +20,8 @@ export default function LanguageSelector({ variant = 'default' }: LanguageSelect
   ]
 
   const onSelect = (code: Language) => {
-    startTransition(() => setLanguage(code))
+    if (code === language) return
+    setLanguage(code)
   }
 
   if (variant === 'compact') {

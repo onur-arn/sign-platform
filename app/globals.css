@@ -1234,6 +1234,29 @@ select {
   text-align: center;
 }
 
+.info-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+}
+
+.info-stat-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--teal);
+  line-height: 1;
+}
+
+.info-stat-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-sub);
+  text-transform: lowercase;
+}
+
 .info-tags {
   display: flex;
   flex-wrap: wrap;

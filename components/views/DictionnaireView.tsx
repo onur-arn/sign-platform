@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useState, useCallback, useEffect, useTransition } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { SIGN_LABELS_FR, SIGN_LABELS_EN, SIGN_LABELS_TR, SIGN_LABELS_PL } from '@/lib/signLabels'
-import { buildDictionaryEntries, type DictionaryEntry } from '@/lib/dictionaryEntries'
+import { buildDictionaryEntries } from '@/lib/dictionaryEntries'
 import { isNumericExpression } from '@/lib/dictionarySemantics'
 import AvatarLoadingOverlay from '@/components/avatar/AvatarLoadingOverlay'
 
@@ -74,8 +74,6 @@ export default function DictionnaireView() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<{ id: string; label: string; ts: number } | null>(null)
   const [preferences, setPreferences] = useState<Record<string, string>>({})
-  const [allSigns, setAllSigns] = useState<DictionaryEntry[]>([])
-  const [isPending, startTransition] = useTransition()
 
   const dictionaryLang = language === 'en' ? 'en' : language === 'pl' ? 'pl' : language === 'tr' ? 'tr' : 'fr'
 
@@ -90,7 +88,11 @@ export default function DictionnaireView() {
   useEffect(() => {
     let cancelled = false
     const cached = prefsCache.get(dictionaryLang)
-    if (cached) setPreferences(cached)
+    if (cached) {
+      setPreferences(cached)
+    } else {
+      setPreferences({})
+    }
 
     fetch(`/api/dictionary/preferences?lang=${dictionaryLang}`, { cache: 'force-cache' })
       .then((res) => (res.ok ? res.json() : { preferences: {} }))
@@ -111,22 +113,10 @@ export default function DictionnaireView() {
     }
   }, [dictionaryLang])
 
-  // Construction différée + cache : ne jamais afficher une autre langue en attendant
-  useEffect(() => {
-    let cancelled = false
-    setAllSigns([])
-    const build = () => {
-      const entries = buildDictionaryEntries(labelsMap, dictionaryLang, preferences)
-      if (!cancelled) {
-        startTransition(() => setAllSigns(entries))
-      }
-    }
-    const id = window.setTimeout(build, 0)
-    return () => {
-      cancelled = true
-      window.clearTimeout(id)
-    }
-  }, [labelsMap, dictionaryLang, preferences])
+  const allSigns = useMemo(
+    () => buildDictionaryEntries(labelsMap, dictionaryLang, preferences),
+    [labelsMap, dictionaryLang, preferences],
+  )
 
   const alphabet = useMemo(() => alphabetForLang(dictionaryLang), [dictionaryLang])
 
@@ -156,7 +146,6 @@ export default function DictionnaireView() {
         <h2 className="panel-title">{t.admin.dictionary}</h2>
         <p className="panel-desc">
           {allSigns.length} {t.admin.dictionarySubtitle}
-          {isPending && allSigns.length === 0 ? '…' : ''}
         </p>
 
         <input
@@ -196,9 +185,7 @@ export default function DictionnaireView() {
         )}
 
         {displayed.length === 0 ? (
-          <p style={{ color: 'var(--text-sub)' }}>
-            {allSigns.length === 0 ? t.dashboard.loading : t.admin.dictionaryNoResult}
-          </p>
+          <p style={{ color: 'var(--text-sub)' }}>{t.admin.dictionaryNoResult}</p>
         ) : (
           <div className="dict-grid max-h-[480px] overflow-y-auto pr-1">
             {displayed.map((s) => (
