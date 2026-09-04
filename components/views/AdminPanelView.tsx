@@ -5,9 +5,6 @@ import { useSession } from 'next-auth/react'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { SIGN_COUNT_LABEL } from '@/lib/signCount'
 import { displayParts } from '@/lib/userName'
-import AdminDictionaryDuplicatesView from '@/components/views/AdminDictionaryDuplicatesView'
-
-type AdminSection = 'users' | 'duplicates'
 
 interface UserRow {
   id: string
@@ -29,7 +26,6 @@ function statusClass(status: string) {
 export default function AdminPanelView() {
   const { data: session } = useSession()
   const { t, language } = useLanguage()
-  const [section, setSection] = useState<AdminSection>('users')
   const [users, setUsers] = useState<UserRow[]>([])
   const [signsCount, setSignsCount] = useState(SIGN_COUNT_LABEL)
   const [protectedEmail, setProtectedEmail] = useState<string | null>(null)
@@ -130,27 +126,6 @@ export default function AdminPanelView() {
 
   return (
     <div className="space-y-5">
-      <div className="admin-subnav">
-        <button
-          type="button"
-          className={`btn btn-sm ${section === 'users' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setSection('users')}
-        >
-          {t.admin.tabUsers}
-        </button>
-        <button
-          type="button"
-          className={`btn btn-sm ${section === 'duplicates' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setSection('duplicates')}
-        >
-          {t.admin.tabDuplicates}
-        </button>
-      </div>
-
-      {section === 'duplicates' ? (
-        <AdminDictionaryDuplicatesView />
-      ) : (
-        <>
       <div className="admin-stats">
         <div className="panel admin-stat">
           <p className="panel-desc" style={{ marginBottom: 0 }}>
@@ -282,7 +257,6 @@ export default function AdminPanelView() {
                 const isSelf =
                   (currentUserId != null && u.id === currentUserId) ||
                   (currentEmail != null && u.email.toLowerCase() === currentEmail)
-                const roleLocked = isProtected || isSelf
 
                 return (
                   <tr key={u.id}>
@@ -324,7 +298,7 @@ export default function AdminPanelView() {
                     </td>
                     <td>{new Date(u.createdAt).toLocaleDateString(locale)}</td>
                     <td>
-                      {!roleLocked && (
+                      {!isProtected && !isSelf && (
                         <button
                           type="button"
                           className="btn btn-sm btn-danger-text"
@@ -346,8 +320,6 @@ export default function AdminPanelView() {
           </table>
         </div>
       </div>
-        </>
-      )}
     </div>
   )
 }
