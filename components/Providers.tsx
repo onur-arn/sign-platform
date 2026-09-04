@@ -7,7 +7,7 @@ import { AvatarProvider } from '@/contexts/AvatarContext'
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider refetchInterval={30} refetchOnWindowFocus>
+    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus={false}>
       <LanguageProvider>
         <DarkModeProvider>
           <AvatarProvider>{children}</AvatarProvider>

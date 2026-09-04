@@ -1,18 +1,45 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Sidebar, { type DashboardTab } from '@/components/layout/Sidebar'
 import LanguageSelector from '@/components/LanguageSelector'
 import { DarkModeToggle } from '@/components/DarkModeToggle'
 import TraduireView from '@/components/views/TraduireView'
-import DictionnaireView from '@/components/views/DictionnaireView'
-import DocumentsView from '@/components/views/DocumentsView'
-import AvatarStudioView from '@/components/views/AvatarStudioView'
-import InformationView from '@/components/views/InformationView'
-import AdminPanelView from '@/components/views/AdminPanelView'
 import { useLanguage } from '@/contexts/LanguageContext'
+
+function ViewFallback() {
+  const { t } = useLanguage()
+  return (
+    <div className="grid place-items-center min-h-[240px]">
+      <p style={{ color: 'var(--text-sub)' }}>{t.dashboard.loading}</p>
+    </div>
+  )
+}
+
+/** Vues secondaires : chargées à la demande (évite de bloquer le login). */
+const DictionnaireView = dynamic(() => import('@/components/views/DictionnaireView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const DocumentsView = dynamic(() => import('@/components/views/DocumentsView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const AvatarStudioView = dynamic(() => import('@/components/views/AvatarStudioView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const InformationView = dynamic(() => import('@/components/views/InformationView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
+const AdminPanelView = dynamic(() => import('@/components/views/AdminPanelView'), {
+  ssr: false,
+  loading: () => <ViewFallback />,
+})
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
@@ -47,15 +74,21 @@ export default function DashboardPage() {
     return () => mq.removeEventListener('change', sync)
   }, [])
 
-  // Préchauffe le dictionnaire hors chemin critique (évite de bloquer le clic langue)
+  // Précharge les autres onglets hors chemin critique (après affichage de Traduire)
   useEffect(() => {
+    if (status !== 'authenticated') return
     const id = window.setTimeout(() => {
+      void import('@/components/views/DictionnaireView')
+      void import('@/components/views/DocumentsView')
+      void import('@/components/views/AvatarStudioView')
+      void import('@/components/views/InformationView')
+      void import('@/components/views/AdminPanelView')
       void import('@/lib/dictionaryEntries').then(({ warmDictionaryCache }) => {
-        warmDictionaryCache('all')
+        warmDictionaryCache('fr')
       })
-    }, 600)
+    }, 2500)
     return () => window.clearTimeout(id)
-  }, [])
+  }, [status])
 
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'ADMIN'
 
@@ -124,12 +157,14 @@ export default function DashboardPage() {
         </header>
 
         <main className="shell-content">
-          {tab === 'traduire' && <TraduireView />}
-          {tab === 'dictionnaire' && <DictionnaireView />}
-          {tab === 'documents' && <DocumentsView />}
-          {tab === 'avatar' && <AvatarStudioView />}
-          {tab === 'information' && <InformationView />}
-          {tab === 'admin' && isAdmin && <AdminPanelView />}
+          <Suspense fallback={<ViewFallback />}>
+            {tab === 'traduire' && <TraduireView />}
+            {tab === 'dictionnaire' && <DictionnaireView />}
+            {tab === 'documents' && <DocumentsView />}
+            {tab === 'avatar' && <AvatarStudioView />}
+            {tab === 'information' && <InformationView />}
+            {tab === 'admin' && isAdmin && <AdminPanelView />}
+          </Suspense>
         </main>
       </div>
     </div>

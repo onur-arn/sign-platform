@@ -25,7 +25,10 @@ export default function LoginPage() {
     try {
       const result = await signIn('credentials', { email, password, redirect: false })
       if (result?.error) setError(translateAuthError(result.error, t.auth))
-      else if (result?.ok) router.push('/dashboard')
+      else if (result?.ok) {
+        // replace : pas d’historique login → dashboard ; évite un aller-retour lent
+        router.replace('/dashboard')
+      }
     } catch {
       setError(t.auth.errorOccurred)
     } finally {

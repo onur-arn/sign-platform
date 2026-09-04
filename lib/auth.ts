@@ -84,11 +84,11 @@ export const authOptions: NextAuthOptions = {
         token.roleCheckedAt = Date.now();
       }
 
-      // Resynchronise le rôle depuis la DB pour que grant/revoke prenne effet sans reconnecter
+      // Resynchronise le rôle depuis la DB (grant/revoke) — pas à chaque requête
       const checkedAt = typeof token.roleCheckedAt === 'number' ? token.roleCheckedAt : 0;
       const shouldRefreshRole =
         Boolean(token.email) &&
-        (trigger === 'update' || !token.role || Date.now() - checkedAt > 30_000);
+        (trigger === 'update' || !token.role || Date.now() - checkedAt > 5 * 60_000);
 
       if (shouldRefreshRole) {
         const dbUser = await prisma.user.findUnique({
