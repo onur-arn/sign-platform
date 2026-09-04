@@ -12,6 +12,9 @@ import {
 import { useSession } from 'next-auth/react'
 import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID, getAvatar, type AvatarOption } from '@/lib/avatars'
 
+/** Flag dédié : seul un clic « Continuer » (ou un choix dans la page Avatar) le pose. */
+const ONBOARDING_DONE_KEY = 'avatarOnboardingDone'
+
 type AvatarContextValue = {
   avatarId: string
   avatar: AvatarOption
@@ -41,36 +44,17 @@ function readStoredAvatarId(userKey: string | null): string {
   return DEFAULT_AVATAR_ID
 }
 
-function readHasChosenAvatar(userKey: string | null): boolean {
+function readOnboardingDone(userKey: string | null): boolean {
   if (typeof window === 'undefined') return true
-  // Pas encore d’identité → ne pas afficher le modal
   if (!userKey) return true
-
-  if (localStorage.getItem(userStorageKey('avatarChosen', userKey)) === '1') return true
-  if (localStorage.getItem(userStorageKey('avatarId', userKey))) return true
-
-  // Migration unique : anciens comptes avec avatar global (avant stockage par email)
-  const alreadyMigrated = localStorage.getItem('avatarOnboardingMigrated') === '1'
-  if (!alreadyMigrated) {
-    const legacyChosen = localStorage.getItem('avatarChosen') === '1'
-    const legacyId = localStorage.getItem('avatarId')
-    if (legacyChosen || legacyId) {
-      const id =
-        legacyId && AVATAR_OPTIONS.some((a) => a.id === legacyId) ? legacyId : DEFAULT_AVATAR_ID
-      persistAvatar(userKey, id, true)
-      localStorage.setItem('avatarOnboardingMigrated', '1')
-      return true
-    }
-  }
-  return false
+  return localStorage.getItem(userStorageKey(ONBOARDING_DONE_KEY, userKey)) === '1'
 }
 
-function persistAvatar(userKey: string | null, id: string, markChosen: boolean) {
+function persistAvatar(userKey: string | null, id: string, markOnboardingDone: boolean) {
   localStorage.setItem(userStorageKey('avatarId', userKey), id)
-  localStorage.setItem('avatarId', id) // compat SignAvatarPlayer / anciens chemins
-  if (markChosen) {
-    localStorage.setItem(userStorageKey('avatarChosen', userKey), '1')
-    localStorage.setItem('avatarChosen', '1')
+  localStorage.setItem('avatarId', id)
+  if (markOnboardingDone && userKey) {
+    localStorage.setItem(userStorageKey(ONBOARDING_DONE_KEY, userKey), '1')
   }
 }
 
@@ -85,10 +69,10 @@ export function AvatarProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (status === 'loading') return
     const id = readStoredAvatarId(userKey)
-    const chosen = readHasChosenAvatar(userKey)
+    const done = readOnboardingDone(userKey)
     setAvatarIdState(id)
-    setNeedsAvatarOnboarding(status === 'authenticated' && !chosen)
-    setAvatarReady(true)
+    setNeedsAvatarOnboarding(status === 'authenticated' && Boolean(userKey) && !done)
+    setAvatarReady(status !== 'loading')
   }, [status, userKey])
 
   const setAvatarId = useCallback(
@@ -101,7 +85,6 @@ export function AvatarProvider({ children }: { children: ReactNode }) {
     [userKey],
   )
 
-  /** Change l’avatar affiché sans confirmer (onboarding). */
   const previewAvatarId = useCallback((id: string) => {
     if (!AVATAR_OPTIONS.some((a) => a.id === id)) return
     setAvatarIdState(id)
