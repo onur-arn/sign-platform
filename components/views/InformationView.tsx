@@ -2,7 +2,6 @@
 
 import Image from 'next/image'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { SIGN_COUNT_LABEL } from '@/lib/signCount'
 
 type Carrier = {
   src: string
@@ -100,11 +99,6 @@ export default function InformationView() {
         </div>
 
         <p className="info-lead">{t.about.description}</p>
-
-        <div className="info-stat" aria-label={`${SIGN_COUNT_LABEL} ${t.admin.availableWords}`}>
-          <span className="info-stat-value">{SIGN_COUNT_LABEL}</span>
-          <span className="info-stat-label">{t.dashboard.words}</span>
-        </div>
 
         <div className="info-tags">
           {tags.map((tag) => (
