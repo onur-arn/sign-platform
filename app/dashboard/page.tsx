@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation'
 import Sidebar, { type DashboardTab } from '@/components/layout/Sidebar'
 import LanguageSelector from '@/components/LanguageSelector'
 import { DarkModeToggle } from '@/components/DarkModeToggle'
-import AvatarOnboardingModal from '@/components/AvatarOnboardingModal'
 import { useLanguage } from '@/contexts/LanguageContext'
 
 function ViewFallback() {
@@ -133,7 +132,6 @@ export default function DashboardPage() {
 
   return (
     <div className={`app-shell ${sidebarOpen ? 'sidebar-open' : ''}`}>
-      <AvatarOnboardingModal />
       <Sidebar
         active={tab}
         onChange={setTab}

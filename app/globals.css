@@ -957,47 +957,6 @@ select {
   box-shadow: 0 0 0 1px var(--teal);
 }
 
-.avatar-onboarding-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: 1.25rem;
-  background: rgba(15, 23, 32, 0.55);
-  backdrop-filter: blur(4px);
-}
-
-.avatar-onboarding-card {
-  width: min(920px, 100%);
-  max-height: min(90vh, 760px);
-  overflow: auto;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
-}
-
-.avatar-onboarding-grid {
-  display: grid;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-@media (min-width: 720px) {
-  .avatar-onboarding-grid {
-    grid-template-columns: 200px minmax(0, 1fr);
-    align-items: start;
-  }
-}
-
-.avatar-onboarding-preview {
-  min-height: 280px;
-}
-
-.avatar-onboarding-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 1.25rem;
-}
-
 .avatar-pick .name {
   font-size: 0.95rem;
   font-weight: 600;
